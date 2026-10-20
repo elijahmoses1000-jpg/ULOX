@@ -1,13 +1,23 @@
-import { ai, db, error, invites, isInviteError, json, router } from "@appdeploy/sdk";
+import { ai, db, error, invites, isInviteError, json, router, secrets } from "@appdeploy/sdk";
 import { notifySubscribers, realtimeSubscriptionRoutes } from "./realtime-subscribers";
 import { announceChallenge, leave, listOnline, ping } from "./live";
 import { getCatalog, getStructure, getTopic } from "./roadmaps";
 import { ResourceKindId, SOURCES, getResources } from "./resources";
 import { getGlossary } from "./glossary";
-import { certificateStatus, claimCertificate, getCertificate } from "./certificates";
+import {
+    certificateStatus,
+    claimCertificate,
+    cleanName,
+    getCertificate,
+    listAllCertificates,
+    revokeCertificates,
+} from "./certificates";
 
 const PLAYERS = "players";
 const ROOMS = "rooms";
+
+/** Set with AppDeploy app secrets. Without it the operator routes stay shut. */
+const ADMIN_SECRET = "ULOX_ADMIN_TOKEN";
 
 const MATCH_LENGTH = 5;
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -39,6 +49,8 @@ const PUZZLE_IDS = [
 interface PlayerRecord {
     playerId: string;
     name: string;
+    /** How the learner wants their name typeset on a certificate. */
+    certificateName?: string;
     colour: string;
     rating: number;
     rd: number;
@@ -49,7 +61,12 @@ interface PlayerRecord {
     wins: number;
     losses: number;
     /** Full progress blob so a signed-in player keeps their work across devices. */
-    progress: { solved?: Record<string, unknown>; topics?: Record<string, string> };
+    progress: {
+        solved?: Record<string, unknown>;
+        topics?: Record<string, string>;
+        /** Stage builds completed in the Lab; certificates cannot be checked without it. */
+        built?: Record<string, boolean>;
+    };
     updatedAt: number;
 }
 
@@ -89,6 +106,39 @@ function str(value: unknown, fallback = ""): string {
 
 function num(value: unknown, fallback: number): number {
     return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Gate for the operator routes. Returns a response when the caller should be
+ * turned away, or null to let them through.
+ *
+ * Fails closed: if ULOX_ADMIN_TOKEN has not been configured, nobody gets in.
+ * The alternative — treating "no secret" as "no gate" — would mean a single
+ * missing deploy step silently opens certificate deletion to the internet.
+ * Comparison is length-constant to avoid leaking the token a byte at a time.
+ */
+async function adminGate(body: unknown) {
+    const supplied = str((body as Record<string, unknown> | undefined)?.token);
+    if (!supplied) return error("Not found", 404);
+
+    let expected: string;
+    try {
+        const names = await secrets.listSecretNames();
+        if (!names.includes(ADMIN_SECRET)) return error("Not found", 404);
+        expected = await secrets.readSecret(ADMIN_SECRET);
+    } catch {
+        return error("Not found", 404);
+    }
+
+    if (!expected || !timingSafeEqual(supplied, expected)) return error("Not found", 404);
+    return null;
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diff === 0;
 }
 
 function makeCode(): string {
@@ -218,6 +268,11 @@ export const handler = router({
             const name = str(b.name, "Guest").slice(0, 24);
             if (!name) return error("name is required", 400);
 
+            // Only overwrite the printed name when one was actually sent: an
+            // older client that does not know about this field must not blank
+            // out a name the learner already chose.
+            const sentCertName = str(b.certificateName).trim();
+
             const record: PlayerRecord = {
                 playerId,
                 name,
@@ -240,9 +295,12 @@ export const handler = router({
             const { items } = await db.list<PlayerRecord>(PLAYERS, { limit: 1000 });
             const existing = items.find(item => item.playerId === playerId);
             if (existing) {
+                const kept = sentCertName ? cleanName(sentCertName) : existing.certificateName;
+                if (kept) record.certificateName = kept;
                 await db.update(PLAYERS, [{ id: existing.id, record: record as unknown as Record<string, unknown> }]);
                 return json({ ok: true, player: { ...record, id: existing.id } });
             }
+            if (sentCertName) record.certificateName = cleanName(sentCertName);
             const [id] = await db.add(PLAYERS, [record as unknown as Record<string, unknown>]);
             if (!id) return error("Could not save the profile", 500);
             return json({ ok: true, player: { ...record, id } });
@@ -520,6 +578,30 @@ export const handler = router({
                 },
                 409
             );
+        },
+    ],
+
+    // Operator-only. Guarded by the ULOX_ADMIN_TOKEN secret rather than by the
+    // sign-in system, because there is no notion of an admin account and
+    // inventing one would be a larger security surface than this needs.
+    "POST /api/admin/certificates/list": [
+        async ({ body }) => {
+            const denied = await adminGate(body);
+            if (denied) return denied;
+            return json({ certificates: await listAllCertificates() });
+        },
+    ],
+
+    "POST /api/admin/certificates/revoke": [
+        async ({ body }) => {
+            const denied = await adminGate(body);
+            if (denied) return denied;
+            const b = (body ?? {}) as Record<string, unknown>;
+            const codes = Array.isArray(b.codes) ? b.codes.map(c => str(c)).filter(Boolean) : [];
+            const playerId = str(b.playerId);
+            if (!codes.length && !playerId) return error("Pass codes[] or playerId", 400);
+            const revoked = await revokeCertificates({ codes, playerId: playerId || undefined });
+            return json({ revoked, count: revoked.length });
         },
     ],
 

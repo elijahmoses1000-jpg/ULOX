@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { Award, Check, Copy, Lock, Printer, ShieldCheck, Sparkles } from 'lucide-react';
+import { Award, Check, Copy, Download, FileText, Image, Lock, Printer, Share2, ShieldCheck, Sparkles } from 'lucide-react';
 import { STAGE_BY_ID } from '../lib/journey';
 import { useProfile } from '../lib/profile';
-import { Card, Chip, useToast } from '../components/ui';
-import { Logo } from '../components/ui';
+import { Card, Chip, Logo, Modal, useToast } from '../components/ui';
+import {
+  CertificateData,
+  certificateBlobs,
+  download,
+  fileStem,
+  shareCertificate,
+  verifyUrl,
+} from '../lib/certificate-render';
 
-interface Held {
-  code: string;
-  name: string;
-  track: string;
-  trackTitle: string;
-  issuedAt: number;
+interface Held extends CertificateData {
   evidence: { topics: number; drills: number; built: boolean; ratingAtIssue: number };
 }
 
@@ -26,16 +28,100 @@ interface TrackRow {
   totals: { topics: number; drills: number };
 }
 
-const hueFor = (track: string) => STAGE_BY_ID.get(track as never)?.hex ?? '#EE1B24';
+const MASTER_HUE = '#F5A524';
+export const hueFor = (track: string) =>
+  track === 'master' ? MASTER_HUE : STAGE_BY_ID.get(track as never)?.hex ?? '#EE1B24';
+
+/**
+ * The one place a name is collected. It is asked for at claim time rather than
+ * at sign-up because that is the only moment it matters, and because a name
+ * typed months earlier for a leaderboard is rarely the one someone wants
+ * printed. Whatever they enter is remembered for the next claim.
+ */
+function NameDialog({
+  open,
+  track,
+  busy,
+  initial,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  track: TrackRow | null;
+  busy: boolean;
+  initial: string;
+  onCancel: () => void;
+  onConfirm: (name: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  useEffect(() => {
+    if (open) setValue(initial);
+  }, [open, initial]);
+
+  const clean = value.replace(/\s+/g, ' ').trim();
+  const tooShort = clean.length < 2;
+  const hue = track ? hueFor(track.track) : '#EE1B24';
+
+  return (
+    <Modal
+      open={open}
+      onClose={busy ? () => undefined : onCancel}
+      title={`Claim ${track?.title ?? 'certificate'}`}
+      footer={
+        <>
+          <button className="btn-quiet !text-xs" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+          <button className="btn-primary !text-xs" disabled={tooShort || busy} onClick={() => onConfirm(clean)}>
+            {busy ? 'Issuing…' : 'Issue certificate'}
+          </button>
+        </>
+      }
+    >
+      <label className="label block mb-2" htmlFor="cert-name">
+        Your full name, as it should appear
+      </label>
+      <input
+        id="cert-name"
+        className="field"
+        value={value}
+        autoFocus
+        maxLength={64}
+        placeholder="e.g. Adaeze Okonkwo-Bello"
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && !tooShort && !busy) onConfirm(clean);
+        }}
+      />
+      <p className="text-[11.5px] text-chalk-faint mt-2">
+        This is printed on the certificate and shown to anyone who verifies it. Use the spelling, capitalisation and
+        accents you want — it is saved for your other certificates too.
+      </p>
+
+      <div className="mt-4 rounded-lg border border-ink-700 bg-ink-900 px-4 py-5 text-center">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-chalk-faint">Preview</p>
+        <p className="font-display text-lg font-bold mt-2.5" style={{ color: hue }}>
+          {track?.title}
+        </p>
+        <p className="text-[11px] text-chalk-dim mt-1.5">awarded to</p>
+        <p className="font-display text-[19px] font-bold mt-0.5 break-words">
+          {clean || <span className="text-chalk-faint">Your name</span>}
+        </p>
+      </div>
+    </Modal>
+  );
+}
 
 export function Certificates() {
   const toast = useToast();
   const profile = useProfile(s => s.profile);
   const push = useProfile(s => s.push);
+  const setCertificateName = useProfile(s => s.setCertificateName);
 
   const [tracks, setTracks] = useState<TrackRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [claiming, setClaiming] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [asking, setAsking] = useState<TrackRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,16 +141,24 @@ export function Certificates() {
     void load();
   }, [load]);
 
-  const claim = async (track: string) => {
-    setClaiming(track);
+  const claim = async (name: string) => {
+    const track = asking;
+    if (!track) return;
+    setClaiming(true);
     try {
+      // Save the name before claiming so the server has it even if the request
+      // is retried, and so the next track does not ask again.
+      setCertificateName(name);
+      await push();
+
       const res = await api.post('/api/certificates/claim', {
         playerId: profile.playerId,
-        track,
-        name: profile.name,
+        track: track.track,
+        name,
       });
       if (res.data?.certificate) {
         toast(res.data.alreadyHeld ? 'You already hold this one.' : 'Certificate issued.', 'ok');
+        setAsking(null);
         await load();
       }
     } catch (err) {
@@ -82,7 +176,7 @@ export function Certificates() {
         toast('Could not issue that certificate right now.', 'err');
       }
     } finally {
-      setClaiming(null);
+      setClaiming(false);
     }
   };
 
@@ -97,7 +191,7 @@ export function Certificates() {
           code anyone can verify. Finish all six and you earn the Agentic Engineering certificate.
         </p>
         {heldCount > 0 && (
-          <p className="text-[12.5px] mt-2 font-bold" style={{ color: '#F5A524' }}>
+          <p className="text-[12.5px] mt-2 font-bold" style={{ color: MASTER_HUE }}>
             {heldCount} earned
           </p>
         )}
@@ -112,22 +206,14 @@ export function Certificates() {
       ) : (
         <div className="space-y-2">
           {tracks.map(row => {
-            const hue = row.track === 'master' ? '#F5A524' : hueFor(row.track);
-            const outstanding =
-              row.remaining.topics + row.remaining.drills + (row.remaining.built ? 0 : 1);
+            const hue = hueFor(row.track);
+            const outstanding = row.remaining.topics + row.remaining.drills + (row.remaining.built ? 0 : 1);
             return (
-              <Card
-                key={row.track}
-                className="p-4"
-                style={row.held ? { borderColor: `${hue}66` } : undefined}
-              >
+              <Card key={row.track} className="p-4" style={row.held ? { borderColor: `${hue}66` } : undefined}>
                 <div className="flex items-start gap-3.5">
                   <span
                     className="w-11 h-11 rounded-xl grid place-items-center shrink-0"
-                    style={{
-                      background: row.held ? hue : `${hue}1F`,
-                      color: row.held ? '#0E0F11' : hue,
-                    }}
+                    style={{ background: row.held ? hue : `${hue}1F`, color: row.held ? '#0E0F11' : hue }}
                   >
                     {row.held ? <Award size={20} /> : row.earned ? <Sparkles size={19} /> : <Lock size={17} />}
                   </span>
@@ -145,13 +231,14 @@ export function Certificates() {
                         <code className="text-[12px] font-mono font-bold" style={{ color: hue }}>
                           {row.held.code}
                         </code>
+                        <span className="text-[11.5px] text-chalk-faint">· {row.held.name}</span>
                         <Link to={`/verify/${row.held.code}`} className="btn-ghost !px-2.5 !py-1 !text-[11px]">
-                          View
+                          Open & download
                         </Link>
                         <button
                           className="btn-quiet !px-2 !py-1 !text-[11px]"
                           onClick={async () => {
-                            const url = `${window.location.origin}${window.location.pathname}#/verify/${row.held!.code}`;
+                            const url = verifyUrl(row.held!.code);
                             try {
                               await navigator.clipboard.writeText(url);
                               toast('Verification link copied', 'ok');
@@ -160,7 +247,7 @@ export function Certificates() {
                             }
                           }}
                         >
-                          <Copy size={11} /> Share
+                          <Copy size={11} /> Copy link
                         </button>
                       </div>
                     ) : (
@@ -181,10 +268,10 @@ export function Certificates() {
                   {!row.held && (
                     <button
                       className={row.earned ? 'btn-primary !text-xs shrink-0' : 'btn-ghost !text-xs shrink-0'}
-                      disabled={!row.earned || claiming === row.track}
-                      onClick={() => claim(row.track)}
+                      disabled={!row.earned}
+                      onClick={() => setAsking(row)}
                     >
-                      {claiming === row.track ? 'Checking…' : row.earned ? 'Claim' : 'Locked'}
+                      {row.earned ? 'Claim' : 'Locked'}
                     </button>
                   )}
                 </div>
@@ -193,6 +280,15 @@ export function Certificates() {
           })}
         </div>
       )}
+
+      <NameDialog
+        open={!!asking}
+        track={asking}
+        busy={claiming}
+        initial={profile.certificateName || (profile.name.startsWith('Player ') ? '' : profile.name)}
+        onCancel={() => setAsking(null)}
+        onConfirm={claim}
+      />
 
       <p className="text-[11.5px] text-chalk-faint mt-6 leading-relaxed">
         These are UloX certificates of completion. They record work you actually did on this platform — every
@@ -205,8 +301,10 @@ export function Certificates() {
 /** Public verification. Anyone with the code can open this; no account needed. */
 export function VerifyCertificate() {
   const { code = '' } = useParams();
+  const toast = useToast();
   const [cert, setCert] = useState<Held | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'missing'>('loading');
+  const [busy, setBusy] = useState<'jpg' | 'pdf' | 'share' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -224,6 +322,34 @@ export function VerifyCertificate() {
       cancelled = true;
     };
   }, [code]);
+
+  const hue = useMemo(() => (cert ? hueFor(cert.track) : '#EE1B24'), [cert]);
+
+  const exportAs = async (kind: 'jpg' | 'pdf' | 'share') => {
+    if (!cert) return;
+    setBusy(kind);
+    try {
+      const { jpeg, pdf } = await certificateBlobs(cert, hue);
+      const stem = fileStem(cert);
+      if (kind === 'jpg') {
+        download(jpeg, `${stem}.jpg`);
+        toast('JPG downloaded', 'ok');
+      } else if (kind === 'pdf') {
+        download(pdf, `${stem}.pdf`);
+        toast('PDF downloaded', 'ok');
+      } else {
+        const shared = await shareCertificate(cert, jpeg);
+        if (!shared) {
+          download(jpeg, `${stem}.jpg`);
+          toast('Sharing is not available here — the image was downloaded instead.', 'info');
+        }
+      }
+    } catch {
+      toast('Could not build the file. Try the print option instead.', 'err');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (state === 'loading') {
     return <div className="max-w-xl mx-auto px-4 py-20 text-center text-chalk-dim">Checking this certificate…</div>;
@@ -244,7 +370,6 @@ export function VerifyCertificate() {
     );
   }
 
-  const hue = cert.track === 'master' ? '#F5A524' : hueFor(cert.track);
   const issued = new Date(cert.issuedAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
@@ -254,8 +379,10 @@ export function VerifyCertificate() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 lg:py-10">
       <article
-        className="relative overflow-hidden rounded-2xl border-2 p-7 sm:p-10 text-center print:border-black"
-        style={{ borderColor: `${hue}88` }}
+        className="relative overflow-hidden rounded-2xl border-2 p-7 sm:p-10 text-center"
+        // --cert-hue lets the print stylesheet restore the full-strength hue;
+        // the on-screen border is deliberately softened with alpha.
+        style={{ borderColor: `${hue}88`, ['--cert-hue' as string]: hue } as React.CSSProperties}
       >
         <div
           className="absolute -right-24 -top-28 w-80 h-80 rounded-full blur-3xl opacity-20 print:hidden"
@@ -276,7 +403,7 @@ export function VerifyCertificate() {
           </h1>
 
           <p className="text-[13px] text-chalk-dim mt-5">awarded to</p>
-          <p className="font-display text-[22px] sm:text-[26px] font-bold mt-1">{cert.name}</p>
+          <p className="font-display text-[22px] sm:text-[26px] font-bold mt-1 break-words">{cert.name}</p>
 
           <div className="mt-6 flex items-center justify-center gap-2 flex-wrap text-[12px] text-chalk-dim">
             <span className="flex items-center gap-1">
@@ -309,16 +436,40 @@ export function VerifyCertificate() {
         </div>
       </article>
 
-      <div className="flex items-center justify-center gap-2 mt-5 print:hidden">
-        <button className="btn-ghost !text-xs" onClick={() => window.print()}>
-          <Printer size={13} /> Print or save as PDF
+      <div className="flex items-center justify-center gap-2 mt-5 flex-wrap print:hidden">
+        <button className="btn-primary !text-xs" onClick={() => exportAs('share')} disabled={!!busy}>
+          <Share2 size={13} /> {busy === 'share' ? 'Preparing…' : 'Share'}
         </button>
-        <Link to="/certificates" className="btn-quiet !text-xs">
-          My certificates
-        </Link>
+        <button className="btn-ghost !text-xs" onClick={() => exportAs('pdf')} disabled={!!busy}>
+          <FileText size={13} /> {busy === 'pdf' ? 'Building…' : 'PDF'}
+        </button>
+        <button className="btn-ghost !text-xs" onClick={() => exportAs('jpg')} disabled={!!busy}>
+          <Image size={13} /> {busy === 'jpg' ? 'Building…' : 'JPG'}
+        </button>
+        <button
+          className="btn-quiet !text-xs"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(verifyUrl(cert.code));
+              toast('Verification link copied', 'ok');
+            } catch {
+              toast(verifyUrl(cert.code), 'info');
+            }
+          }}
+        >
+          <Copy size={13} /> Copy link
+        </button>
+        <button className="btn-quiet !text-xs" onClick={() => window.print()}>
+          <Printer size={13} /> Print
+        </button>
       </div>
 
-      <p className="text-center text-[11.5px] text-chalk-faint mt-5 print:hidden">
+      <p className="text-center text-[11.5px] text-chalk-faint mt-4 print:hidden">
+        <Download size={11} className="inline -mt-0.5 mr-1" />
+        The PDF prints on A4; the JPG is sized for LinkedIn, X and WhatsApp. Both carry the verification link.
+      </p>
+
+      <p className="text-center text-[11.5px] text-chalk-faint mt-3 print:hidden">
         Verified against UloX records. A certificate of completion on this platform, not an accredited qualification.
       </p>
     </div>

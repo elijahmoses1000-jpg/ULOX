@@ -192,6 +192,14 @@ body {
     background: #ffffff !important;
     color: #0e0f11 !important;
   }
+  /* The shell paints its own dark background. Whitening <body> alone is not
+     enough: the moment the reader turns on "background graphics" — which they
+     will, to keep the certificate's border — that wrapper prints a black page
+     around the card. */
+  #root,
+  #root *:not(article) {
+    background-color: transparent !important;
+  }
   aside,
   header,
   nav,
@@ -203,9 +211,15 @@ body {
   }
   article {
     box-shadow: none !important;
-    background: #ffffff !important;
+    background-color: #ffffff !important;
+    /* Set by the certificate itself; the on-screen border carries an alpha that
+       prints almost invisibly. */
+    border-color: var(--cert-hue, #0e0f11) !important;
   }
-  article * {
+  /* Ink on paper for the body text, but leave the inline colours alone: the
+     discipline's hue is the one thing distinguishing a Loop certificate from a
+     Graph one, and it should survive the printer. */
+  article *:not([style*='color']) {
     color: #0e0f11 !important;
   }
 }

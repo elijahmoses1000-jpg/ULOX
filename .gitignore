@@ -6,6 +6,10 @@ dist-ssr/
 scripts/payload.json
 scripts/audit.mjs
 
+# Launch-video intermediates: ~3,000 PNG frames and the source screenshots are
+# rebuildable from brag-output/brag-plan.md. The MP4s and posters are kept.
+brag-output/work/
+
 *.local
 .env
 .env.*

@@ -100,12 +100,35 @@ const called = Array.from(callsSeen).map(k => {
   const [method, url] = k.split(' ');
   return { method, url };
 });
+let operatorRoutes = 0;
 for (const r of declaredRoutes) {
   if (r.route === '/api/_healthcheck') continue;
+  // /api/admin/* is deliberately unreachable from the app: these are operator
+  // tools driven by hand with the ULOX_ADMIN_TOKEN secret. Exempt them from the
+  // dead-endpoint rule, but keep them under the opposite rule — a frontend call
+  // to a route that does not exist is still a failure.
+  if (r.route.startsWith('/api/admin/')) {
+    operatorRoutes += 1;
+    continue;
+  }
   const pattern = new RegExp(`^${r.route.replace(/:[^/]+/g, '[^/]+')}$`);
   if (!called.some(c => c.method === r.method && candidates(c.url).some(u => pattern.test(u)))) {
     fail(`backend route ${r.method} ${r.route} is never called by the frontend (dead endpoint)`);
   }
+}
+if (operatorRoutes) ok(`${operatorRoutes} operator route(s) under /api/admin exempt from the dead-endpoint rule`);
+
+// An operator route that forgot its gate would be an open door, so prove every
+// one of them runs adminGate before it does anything.
+{
+  const backend = read('backend/index.ts');
+  for (const r of declaredRoutes.filter(d => d.route.startsWith('/api/admin/'))) {
+    const key = `"${r.method} ${r.route}"`;
+    const at = backend.indexOf(key);
+    const body = at === -1 ? '' : backend.slice(at, at + 700);
+    if (!body.includes('adminGate')) fail(`operator route ${r.method} ${r.route} does not call adminGate`);
+  }
+  ok('every /api/admin route is behind adminGate');
 }
 
 // --- 3. Router: every internal link resolves ---------------------------------

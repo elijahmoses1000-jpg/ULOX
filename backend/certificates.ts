@@ -86,6 +86,12 @@ export interface Certificate {
 interface PlayerRecord {
     playerId: string;
     name: string;
+    /**
+     * The name the learner wants printed. Separate from `name`, which is the
+     * short handle shown in the arena and on the leaderboard: "Eli" is right
+     * next to a rating and wrong on a certificate.
+     */
+    certificateName?: string;
     rating: number;
     progress?: {
         solved?: Record<string, unknown>;
@@ -95,6 +101,22 @@ interface PlayerRecord {
 }
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/**
+ * A printed name is permanent, so normalise it rather than trusting whatever
+ * arrives: collapse runs of whitespace (a pasted name often carries a newline),
+ * strip control characters, and cap the length the certificate can actually
+ * typeset. The 64 is a layout limit, not a validation opinion about names.
+ */
+export function cleanName(raw: string | undefined): string {
+    const cleaned = (raw ?? "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 64);
+    return cleaned || "Anonymous";
+}
 
 function makeCode(track: string): string {
     let tail = "";
@@ -199,7 +221,7 @@ export async function claimCertificate(playerId: string, track: string, displayN
     const certificate: Certificate = {
         code: makeCode(track),
         playerId,
-        name: (displayName || player.name || "Anonymous").slice(0, 48),
+        name: cleanName(displayName || player.certificateName || player.name),
         track,
         trackTitle: trackTitle(track),
         issuedAt: Date.now(),
@@ -214,6 +236,33 @@ export async function claimCertificate(playerId: string, track: string, displayN
     const [id] = await db.add(CERTS, [certificate as unknown as Record<string, unknown>]);
     if (!id) return { ok: false, reason: "no_profile" };
     return { ok: true, certificate, alreadyHeld: false };
+}
+
+/**
+ * Administrative revocation. Issuing is one-way by design — a learner cannot
+ * delete a certificate, or they could reissue one under a different name — so
+ * removing a mistake (a test run, a certificate issued under a wrong name) has
+ * to be an operator action behind the ULOX_ADMIN_TOKEN secret.
+ *
+ * Returns the codes it actually removed, so the caller can tell "nothing
+ * matched" apart from "removed".
+ */
+export async function revokeCertificates(opts: { codes?: string[]; playerId?: string }): Promise<string[]> {
+    const wanted = new Set((opts.codes ?? []).map(c => c.trim().toUpperCase()).filter(Boolean));
+    if (!wanted.size && !opts.playerId) return [];
+
+    const { items } = await db.list<Certificate>(CERTS, { limit: 1000 });
+    const doomed = items.filter(c => wanted.has((c.code ?? "").toUpperCase()) || (!!opts.playerId && c.playerId === opts.playerId));
+    if (!doomed.length) return [];
+
+    const results = await db.delete(CERTS, doomed.map(c => c.id));
+    return doomed.filter((_, i) => results[i]).map(c => c.code);
+}
+
+/** Every issued certificate, newest first. Operator view; never exposed publicly. */
+export async function listAllCertificates(): Promise<Certificate[]> {
+    const { items } = await db.list<Certificate>(CERTS, { limit: 1000 });
+    return items.sort((a, b) => (b.issuedAt ?? 0) - (a.issuedAt ?? 0));
 }
 
 /** Every track with its current state, for the certificates screen. */

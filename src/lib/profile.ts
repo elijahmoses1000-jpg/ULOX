@@ -29,6 +29,13 @@ export interface SolveRecord {
 export interface Profile {
   playerId: string;
   name: string;
+  /**
+   * The name to print on a certificate, as the learner wants it to appear.
+   * Deliberately distinct from `name`: that one sits beside a rating in the
+   * arena and is capped at 24 characters, which is the wrong shape for
+   * "Oluwaseun Adeyemi-Fakorede". Empty until they are asked.
+   */
+  certificateName: string;
   colour: string;
   rating: Rating;
   xp: number;
@@ -58,6 +65,7 @@ function freshProfile(playerId = randomId()): Profile {
   return {
     playerId,
     name: `Player ${Math.floor(1000 + Math.random() * 9000)}`,
+    certificateName: '',
     colour: COLOURS[Math.floor(Math.random() * COLOURS.length)],
     rating: { ...DEFAULT_RATING },
     xp: 0,
@@ -77,6 +85,7 @@ function normalise(raw: unknown, playerId: string): Profile {
     ...parsed,
     playerId,
     rating: { ...DEFAULT_RATING, ...parsed.rating },
+    certificateName: parsed.certificateName ?? '',
     solved: parsed.solved ?? {},
     topics: parsed.topics ?? {},
     arena: { wins: 0, losses: 0, draws: 0, ...parsed.arena },
@@ -172,6 +181,7 @@ interface ProfileState {
   authBusy: boolean;
 
   setName: (name: string) => void;
+  setCertificateName: (name: string) => void;
   setColour: (colour: string) => void;
   touchStreak: () => void;
   markTopic: (topicId: string, status: 'seen' | 'done') => void;
@@ -195,6 +205,11 @@ function mergeRemote(local: Profile, remote: Record<string, unknown>): Profile {
   return {
     ...local,
     name: typeof remote.name === 'string' && remote.name ? remote.name : local.name,
+    // Local wins: if they just typed a name on this device, signing in should
+    // not quietly replace it with the one they chose a year ago elsewhere.
+    certificateName:
+      local.certificateName ||
+      (typeof remote.certificateName === 'string' ? remote.certificateName : ''),
     colour: typeof remote.colour === 'string' && remote.colour ? remote.colour : local.colour,
     rating:
       typeof remote.rating === 'number' && Object.keys(local.solved).length === 0
@@ -223,6 +238,16 @@ export const useProfile = create<ProfileState>((set, get) => ({
   setName: name =>
     set(state => ({
       profile: persist(state.identity, { ...state.profile, name: name.slice(0, 24) || state.profile.name }),
+    })),
+
+  setCertificateName: certificateName =>
+    set(state => ({
+      profile: persist(state.identity, {
+        ...state.profile,
+        // Collapse whitespace here too, not only on the server: what the
+        // learner sees in the preview must be what gets printed.
+        certificateName: certificateName.replace(/\s+/g, ' ').trim().slice(0, 64),
+      }),
     })),
 
   setColour: colour => set(state => ({ profile: persist(state.identity, { ...state.profile, colour }) })),
@@ -319,6 +344,7 @@ export const useProfile = create<ProfileState>((set, get) => ({
       await api.post('/api/players/upsert', {
         playerId: profile.playerId,
         name: profile.name,
+        certificateName: profile.certificateName,
         colour: profile.colour,
         rating: profile.rating.rating,
         rd: profile.rating.rd,

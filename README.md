@@ -54,11 +54,42 @@ Finish a discipline (read every topic, fix every drill, complete the build) and
 UloX issues a certificate with a publicly verifiable code at `/#/verify/:code`.
 Finish all six and the Agentic Engineering capstone unlocks.
 
+At claim time the learner is asked for their full name, exactly as it should be
+typeset, with a live preview. It is stored separately from the 24-character
+arena handle and remembered for later claims.
+
+Each certificate exports as a **PDF** (A4 landscape, for printing) and a **JPG**
+(for posting), plus the OS share sheet on mobile. Both are drawn on a canvas in
+`src/lib/certificate-render.ts` from the certificate record's own fields — the
+JPG *is* the PDF's only content, so the two cannot drift, and neither depends on
+the page's layout or scroll position. The PDF is assembled by hand (five
+objects, ~60 lines) rather than pulling a PDF library into every page load. Both
+carry the verification URL.
+
 Requirements are re-derived on the server (`backend/certificates.ts`) from the
 player's stored progress before anything is issued — the client cannot assert
 that it earned one. The honest limit is documented at the top of that file:
 progress is *reported* by the client, so these are a record of work done on the
 platform, not a tamper-proof credential, and the UI says so.
+
+Issuing is one-way for learners. Removing a certificate (a test run, a wrong
+name) is an operator action behind the `ULOX_ADMIN_TOKEN` app secret:
+
+```
+POST /api/admin/certificates/list    { token }
+POST /api/admin/certificates/revoke  { token, codes[] | playerId }
+```
+
+Both fail closed — if the secret is not configured, they answer 404, so a
+missed deploy step cannot leave certificate deletion open. `scripts/audit.ts`
+asserts that every `/api/admin/*` route calls `adminGate` before doing anything.
+
+## Launch videos
+
+`brag-output/` holds six 1080×1080 MP4s built with
+[`/brag`](https://github.com/latent-spaces/brag), one per angle, each with a
+poster and share copy. `brag-output/brag-plan.md` documents the creative plan
+and how to rebuild them.
 
 ## Content, pulled live
 
