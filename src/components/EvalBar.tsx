@@ -111,7 +111,12 @@ export function EvalPanel({
         <div className="mt-3 grid grid-cols-3 gap-1.5">
           <Stat label={t('budget')} value={`${report.metrics.estimatedTokens}`} sub={`/ ${report.metrics.budget}`} tone={overBudget ? 'down' : 'up'} />
           <Stat label={level === 'beginner' ? 'Setup' : 'ITOLS'} value={`${Math.round(report.metrics.itolsCoverage * 100)}%`} tone={report.metrics.itolsCoverage > 0.8 ? 'up' : 'warn'} />
-          <Stat label={t('run')} value={t(STATUS_TERM[position.sim.status] ?? 'outStuck')} tone={position.sim.status === 'terminated' ? 'up' : 'down'} />
+          <Stat
+            label={t('run')}
+            value={t(STATUS_TERM[position.sim.status] ?? 'outStuck')}
+            tone={position.sim.status === 'terminated' ? 'up' : 'down'}
+            prose
+          />
         </div>
         {header}
       </div>
@@ -144,12 +149,36 @@ export function EvalPanel({
   );
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: 'up' | 'down' | 'warn' }) {
+/**
+ * `prose` is for values that are a phrase rather than a number. At beginner
+ * level the run status reads "It costs too much", which a single truncated
+ * mono line turned into "It costs to…" — so those wrap to two lines in the
+ * body face instead. The fixed min-height keeps the three tiles aligned
+ * whether or not one of them wraps.
+ */
+function Stat({
+  label,
+  value,
+  sub,
+  tone,
+  prose,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone: 'up' | 'down' | 'warn';
+  prose?: boolean;
+}) {
   const colours = { up: 'text-eval-up', down: 'text-eval-down', warn: 'text-eval-warn' };
   return (
-    <div className="panel-flat px-2 py-1.5">
+    <div className="panel-flat px-2 py-1.5 min-h-[46px] flex flex-col justify-center">
       <div className="text-[9px] font-bold uppercase tracking-wider text-chalk-faint">{label}</div>
-      <div className={`text-[13px] font-bold font-mono truncate ${colours[tone]}`}>
+      <div
+        className={`font-bold ${colours[tone]} ${
+          prose ? 'text-[11.5px] leading-tight truncate-2' : 'text-[13px] font-mono truncate'
+        }`}
+        title={prose ? `${value}${sub ? ` ${sub}` : ''}` : undefined}
+      >
         {value}
         {sub && <span className="text-chalk-faint font-normal"> {sub}</span>}
       </div>

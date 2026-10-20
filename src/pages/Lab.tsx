@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
 import { BookOpen, Bot, ChevronLeft, GitFork, Hammer, MessageSquareText, Plug, Share2, X } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
@@ -39,6 +39,7 @@ export function Lab() {
   // instead of making someone navigate back to find the checkbox.
   const stage = STAGE_BY_ID.get((params.get('stage') ?? '') as never);
   const [stageBuilt, setStageBuilt] = useState(() => (stage ? !!readBuilt()[stage.id] : false));
+  const navigate = useNavigate();
   const load = useLab(s => s.load);
   const graph = useLab(s => s.graph);
   const toast = useToast();
@@ -206,7 +207,9 @@ export function Lab() {
   );
 
   // On a journey build the checklist leads and the pattern notes follow it;
-  // a free build has no task, so the notes are all there is.
+  // a free build has only the notes — and on a blank canvas there are no notes
+  // either, so the column is dropped rather than left standing empty. An empty
+  // 280px panel is pure width taken away from the graph.
   const brief = guide ? (
     <>
       {guide}
@@ -217,9 +220,9 @@ export function Lab() {
         {reference}
       </details>
     </>
-  ) : (
+  ) : pattern ? (
     reference
-  );
+  ) : undefined;
 
   const header = (
     <div className="px-3 pt-3 pb-2 flex items-center gap-2 flex-wrap">
@@ -247,29 +250,31 @@ export function Lab() {
           <BookOpen size={12} /> Pattern book
         </Link>
       ) : (
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {PATTERNS.map(p => (
-            <Link
-              key={p.id}
-              to={`/lab/${p.id}`}
-              onClick={() => toast(`Loaded ${p.name}`, 'info')}
-              title={p.name}
-              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition
-                ${p.id === (preset ?? 'react') ? 'bg-brand text-white border-brand' : 'bg-ink-850 text-chalk-dim border-ink-700 hover:text-chalk'}`}
-            >
-              {/* The code meant nothing to anyone who had not read the book. */}
-              {p.name.split(/[ /]/)[0]}
-            </Link>
-          ))}
-          <Link
-            to="/lab/blank"
-            title="Start from an empty canvas"
-            className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition
-              ${preset === 'blank' ? 'bg-brand text-white border-brand' : 'bg-ink-850 text-chalk-dim border-ink-700 hover:text-chalk'}`}
+        /* Seven chips plus a button overran the viewport and clipped the last
+           one. One labelled picker cannot overflow, and reads as a choice
+           rather than a row of unexplained buttons. */
+        <label className="flex items-center gap-2 shrink-0 min-w-0">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-chalk-faint hidden sm:inline">
+            Start from
+          </span>
+          <select
+            className="field !py-1.5 !text-[12px] !w-auto max-w-[190px]"
+            value={preset ?? 'react'}
+            aria-label="Start from a pattern"
+            onChange={e => {
+              const id = e.target.value;
+              navigate(`/lab/${id}`);
+              toast(id === 'blank' ? 'Empty canvas' : `Loaded ${PATTERN_BY_ID.get(id)?.name ?? id}`, 'info');
+            }}
           >
-            Blank
-          </Link>
-        </div>
+            {PATTERNS.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            <option value="blank">Empty canvas</option>
+          </select>
+        </label>
       )}
     </div>
   );
@@ -279,13 +284,18 @@ export function Lab() {
       {header}
       {stage && (
         <div
-          className="mx-3 mb-2 px-3 py-2 rounded-lg border flex items-center gap-2 animate-popIn"
+          className="mx-3 mb-2 px-3 py-2 rounded-lg border flex items-start sm:items-center gap-x-2 gap-y-1.5 flex-wrap animate-popIn"
           style={{ borderColor: `${stage.hex}55`, background: `${stage.hex}12` }}
         >
-          <Hammer size={14} className="shrink-0" style={{ color: stage.hex }} />
-          <span className="text-[12px] text-chalk min-w-0 grow">
-            <span className="font-bold">Step {stage.n} · {stage.formal}</span>
-            <span className="text-chalk-dim"> — {stage.buildLabel}</span>
+          <Hammer size={14} className="shrink-0 mt-0.5 sm:mt-0" style={{ color: stage.hex }} />
+          {/* Two lines on a phone, one on a laptop. Left inline, the label
+              wrapped to a second line while the counter and the link stayed
+              vertically centred beside it, which read as interleaved text. */}
+          <span className="text-[12px] text-chalk min-w-0 grow basis-full sm:basis-auto flex flex-col sm:block">
+            <span className="font-bold">
+              Step {stage.n} · {stage.formal}
+            </span>
+            <span className="text-chalk-dim sm:before:content-['_—_']">{stage.buildLabel}</span>
           </span>
           {stageBuilt ? (
             <span className="text-[11px] font-bold text-eval-up shrink-0">Built ✓</span>

@@ -12,6 +12,8 @@ import { Tabs, useToast } from './ui';
 import { useT } from './Level';
 
 type Pane = 'brief' | 'eval' | 'edit' | 'run' | 'moves';
+/** The desktop right column shows one of these at a time. */
+type SidePane = 'eval' | 'edit' | 'moves';
 
 export interface WorkbenchProps {
   /** Rendered above the graph on every breakpoint. */
@@ -48,6 +50,7 @@ export function Workbench({ header, brief, briefLabel, onPositionChange, onHint,
   const toast = useToast();
   const t = useT();
   const [pane, setPane] = useState<Pane>(briefLabel ? 'brief' : 'edit');
+  const [side, setSide] = useState<SidePane>('eval');
   const [playhead, setPlayhead] = useState(0);
   const [running, setRunning] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -214,15 +217,19 @@ export function Workbench({ header, brief, briefLabel, onPositionChange, onHint,
             : 'lg:grid-cols-[minmax(0,1fr)_340px]'
         }`}
       >
+        {/* The left column is now only the brief. The move history used to sit
+            under it in a fixed-height box that could shrink while its content
+            could not, so the pattern notes and "No moves yet" drew over each
+            other. It lives in the right column's tabs instead, which also
+            takes this screen from six panels down to four. */}
         {brief && (
           <aside className="hidden lg:flex flex-col panel overflow-hidden min-h-0">
             <div className="overflow-y-auto grow min-h-0">{brief}</div>
-            <div className="h-48 xl:h-56 border-t border-ink-700 min-h-0">{movesPane}</div>
           </aside>
         )}
 
         <section className="flex flex-col gap-2 min-h-0">
-          <div className="grow min-h-[38vh] lg:min-h-0">
+          <div className="grow min-h-[220px] lg:min-h-0">
             <GraphCanvas
               graph={viewGraph}
               issues={position.report.issues}
@@ -243,25 +250,52 @@ export function Workbench({ header, brief, briefLabel, onPositionChange, onHint,
           <div className="hidden lg:block h-52 panel overflow-hidden shrink-0">{runPane}</div>
         </section>
 
+        {/* One pane at a time, not two stacked at a fixed ratio.
+            The old 52/48 split had no overflow guard, so on a short viewport
+            the health panel's header spilled straight over the editor's
+            headings — and even when it fitted, six panels at once is the
+            thing people were calling complicated. */}
         <aside className="hidden lg:flex flex-col panel overflow-hidden min-h-0">
-          <div className="h-[52%] min-h-0 border-b border-ink-700">{evalPane}</div>
-          <div className="grow min-h-0 overflow-y-auto">{editPane}</div>
+          <div className="p-2 border-b border-ink-700 shrink-0">
+            <Tabs<SidePane>
+              active={side}
+              onChange={setSide}
+              className="!bg-transparent !border-0 !p-0"
+              tabs={[
+                { id: 'eval', label: t('score') },
+                { id: 'edit', label: 'Edit' },
+                { id: 'moves', label: `${t('moves')} ${ledger.filter(e => e.scoring).length}` },
+              ]}
+            />
+          </div>
+          <div className="grow min-h-0 overflow-hidden flex flex-col">
+            {side === 'eval' && evalPane}
+            {side === 'edit' && <div className="overflow-y-auto grow min-h-0">{editPane}</div>}
+            {side === 'moves' && movesPane}
+          </div>
         </aside>
 
-        {/* Mobile pane switcher */}
+        {/* Mobile pane switcher.
+            The tab strip is shrink-0 and the panel's floor is a pixel value,
+            not a vh: a 34vh minimum asked for more height than the row had, so
+            flex took it out of the tabs instead and squashed the strip to 9px
+            — the controls were there but invisible. */}
         <div className="lg:hidden flex flex-col min-h-0 gap-2">
           <Tabs<Pane>
+            className="shrink-0"
             active={pane}
             onChange={setPane}
             tabs={[
               ...(briefLabel ? [{ id: 'brief' as Pane, label: briefLabel }] : []),
-              { id: 'eval', label: `${t('score')} ${position.report.score >= 0 ? '+' : ''}${position.report.score.toFixed(1)}` },
+              // No score in the label: it is the biggest thing inside that pane
+              // already, and repeating it pushed the fifth tab off a phone.
+              { id: 'eval', label: t('score') },
               { id: 'edit', label: 'Edit' },
               { id: 'run', label: t('run') },
               { id: 'moves', label: `${t('moves')} ${ledger.filter(e => e.scoring).length}` },
             ]}
           />
-          <div className="panel grow min-h-[34vh] overflow-hidden flex flex-col">
+          <div className="panel grow min-h-[180px] overflow-hidden flex flex-col">
             {pane === 'brief' && <div className="overflow-y-auto grow min-h-0">{brief}</div>}
             {pane === 'eval' && (
               <div className="overflow-y-auto grow min-h-0">
