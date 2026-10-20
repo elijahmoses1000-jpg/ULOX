@@ -60,6 +60,20 @@ export function extensionFor(mime: string): string {
   return mime.includes('mp4') ? 'mp4' : 'webm';
 }
 
+/**
+ * Which container this browser will actually produce, so the button can say so
+ * instead of the person finding out from the downloaded file. Chrome and Edge
+ * give MP4; Firefox and older Safari only offer WebM, and silently handing
+ * someone a .webm named .mp4 would be worse than telling them.
+ */
+export function preferredFormat(): 'mp4' | 'webm' | null {
+  const type = pickType();
+  return type ? (extensionFor(type) as 'mp4' | 'webm') : null;
+}
+
+/** The frame size every recording is produced at. */
+export const RECORDING_SIZE = { width: W, height: H };
+
 async function ensureFonts() {
   if (typeof document === 'undefined' || !document.fonts) return;
   try {

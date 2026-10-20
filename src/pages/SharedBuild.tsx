@@ -8,7 +8,7 @@ import { analyzeGraph } from '../lib/analyzer';
 import { GraphCanvas } from '../components/GraphCanvas';
 import { Card, Chip, Logo, useToast } from '../components/ui';
 import { buildCardBlob, download, shareBlob, shareUrl } from '../lib/share-card';
-import { extensionFor, recordRun, recorderSupported } from '../lib/run-recorder';
+import { RECORDING_SIZE, extensionFor, preferredFormat, recordRun, recorderSupported } from '../lib/run-recorder';
 
 interface SharedRecord {
   code: string;
@@ -56,6 +56,7 @@ export function SharedBuild() {
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const canRecord = useMemo(() => recorderSupported(), []);
+  const recFormat = useMemo(() => preferredFormat(), []);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -146,7 +147,10 @@ export function SharedBuild() {
         }
       } else {
         download(blob, name);
-        toast('Recording downloaded', 'ok');
+        toast(
+          `Recording downloaded — ${RECORDING_SIZE.width}×${RECORDING_SIZE.height} ${extensionFor(mime).toUpperCase()}`,
+          'ok',
+        );
       }
     } catch (err) {
       toast((err as Error)?.message || 'Could not record that run.', 'err');
@@ -301,9 +305,10 @@ export function SharedBuild() {
             className="btn-ghost !text-xs"
             onClick={() => exportRun('download')}
             disabled={recording || !sim.steps.length}
-            title="Save the run as a video file"
+            title={`Save the run as a ${RECORDING_SIZE.width}×${RECORDING_SIZE.height} ${(recFormat ?? 'video').toUpperCase()} file`}
           >
-            <Video size={13} /> {recording ? 'Recording the run…' : 'Save the run'}
+            <Video size={13} />{' '}
+            {recording ? 'Recording the run…' : `Save the run (${(recFormat ?? '').toUpperCase()})`}
           </button>
         )}
         <button
