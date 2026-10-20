@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { BookOpen, Bot, ChevronLeft, GitFork, Hammer, MessageSquareText, Plug, Share2, X } from 'lucide-react';
+import { BookOpen, Bot, ChevronLeft, GitFork, Hammer, HelpCircle, MessageSquareText, Plug, Share2, X } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { MockInjection } from '../lib/simulator';
 import { PATTERNS, PATTERN_BY_ID, presetGraph } from '../lib/patterns';
@@ -11,6 +11,7 @@ import { STAGE_BY_ID, markBuilt, readBuilt } from '../lib/journey';
 import { BUILD_TASK_BY_STAGE, evaluateTask } from '../lib/build-tasks';
 import { BuildGuide } from '../components/BuildGuide';
 import { PublishDialog } from '../components/PublishDialog';
+import { BuildHelp, useFirstRunHelp } from '../components/BuildHelp';
 import { Workbench } from '../components/Workbench';
 import { Chip, Modal, useToast } from '../components/ui';
 
@@ -48,6 +49,7 @@ export function Lab() {
   const [pendingTool, setPendingTool] = useState<{ name: string; url: string; note: string; meta: string } | null>(null);
   const forkCode = params.get('from');
   const [forked, setForked] = useState<{ code: string; title: string; authorName: string } | null>(null);
+  const [helpOpen, setHelpOpen] = useFirstRunHelp();
   const [publishOpen, setPublishOpen] = useState(false);
   const [score, setScore] = useState(0);
   const [mentorOpen, setMentorOpen] = useState(false);
@@ -239,9 +241,16 @@ export function Lab() {
           away without ?stage=, which silently abandons the task and the work
           done so far. One link out, clearly labelled, is enough. */}
       <button
-        className="ml-auto btn-ghost !px-2.5 !py-1.5 !text-[11px] shrink-0"
+        className="ml-auto btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0"
+        onClick={() => setHelpOpen(true)}
+        title="What this screen is and how to drive it"
+      >
+        <HelpCircle size={12} /> How to use Build
+      </button>
+      <button
+        className="btn-ghost !px-2.5 !py-1.5 !text-[11px] shrink-0"
         onClick={() => setPublishOpen(true)}
-        title="Publish this build and get a shareable link and card"
+        title="Publish this build and get a shareable link, card and recording"
       >
         <Share2 size={12} /> Share build
       </button>
@@ -349,6 +358,7 @@ export function Lab() {
         briefLabel={guide ? 'Build' : undefined}
         onPositionChange={p => setScore(p.report.score)}
       />
+      <BuildHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <PublishDialog
         open={publishOpen}
         onClose={() => setPublishOpen(false)}

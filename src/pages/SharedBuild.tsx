@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { Copy, Eye, GitFork, Image, Play, Share2, Sparkles, Square } from 'lucide-react';
+import { Copy, Eye, GitFork, Image, Play, Share2, Sparkles, Square, Video } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { MockInjection, simulate } from '../lib/simulator';
 import { analyzeGraph } from '../lib/analyzer';
 import { GraphCanvas } from '../components/GraphCanvas';
 import { Card, Chip, Logo, useToast } from '../components/ui';
 import { buildCardBlob, download, shareBlob, shareUrl } from '../lib/share-card';
+import { extensionFor, recordRun, recorderSupported } from '../lib/run-recorder';
 
 interface SharedRecord {
   code: string;
@@ -29,6 +30,10 @@ const LAB_FACTS = [
   'Error-corrected logical qubits were demonstrated at scale in 2024.',
   'Photonic approaches scale best at room temperature.',
 ];
+/** One naming rule for every file this page hands out. */
+const fileStem = (r: { title: string; code: string }) =>
+  `${r.title.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ulox-agent'}-${r.code}`;
+
 const mocksFor = (graph: AgentGraph): MockInjection[] =>
   graph.nodes.filter(n => n.kind === 'tool').flatMap(n => LAB_FACTS.map(data => ({ nodeId: n.id, status: 200, data })));
 
@@ -49,6 +54,8 @@ export function SharedBuild() {
   const [playhead, setPlayhead] = useState(0);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const canRecord = useMemo(() => recorderSupported(), []);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -114,12 +121,46 @@ export function SharedBuild() {
     navigate(`/lab?from=${encodeURIComponent(record.code)}`);
   };
 
+  /**
+   * Export the run itself, not a picture of it. The frames are drawn from the
+   * same trace the page replays, so the file and the live page cannot show
+   * different runs.
+   */
+  const exportRun = async (mode: 'share' | 'download') => {
+    if (!record || !sim) return;
+    setRecording(true);
+    try {
+      const { blob, mime } = await recordRun({
+        graph: record.graph,
+        steps: sim.steps,
+        title: record.title,
+        authorName: record.authorName,
+        code: record.code,
+      });
+      const name = `${fileStem(record)}-run.${extensionFor(mime)}`;
+      if (mode === 'share') {
+        const shared = await shareBlob(blob, name, `${record.title} — a run on UloX`, shareUrl(record.code));
+        if (!shared) {
+          download(blob, name);
+          toast('Sharing is not available here — the recording was downloaded instead.', 'info');
+        }
+      } else {
+        download(blob, name);
+        toast('Recording downloaded', 'ok');
+      }
+    } catch (err) {
+      toast((err as Error)?.message || 'Could not record that run.', 'err');
+    } finally {
+      setRecording(false);
+    }
+  };
+
   const exportCard = async (mode: 'share' | 'download') => {
     if (!record) return;
     setBusy(true);
     try {
       const blob = await buildCardBlob(record);
-      const name = `${record.title.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ulox-agent'}-${record.code}.jpg`;
+      const name = `${fileStem(record)}.jpg`;
       if (mode === 'share') {
         const shared = await shareBlob(blob, name, `${record.title} — built on UloX`, shareUrl(record.code));
         if (!shared) {
@@ -255,6 +296,16 @@ export function SharedBuild() {
         <button className="btn-ghost !text-xs" onClick={() => exportCard('download')} disabled={busy}>
           <Image size={13} /> Card
         </button>
+        {canRecord && (
+          <button
+            className="btn-ghost !text-xs"
+            onClick={() => exportRun('download')}
+            disabled={recording || !sim.steps.length}
+            title="Save the run as a video file"
+          >
+            <Video size={13} /> {recording ? 'Recording the run…' : 'Save the run'}
+          </button>
+        )}
         <button
           className="btn-quiet !text-xs"
           onClick={async () => {

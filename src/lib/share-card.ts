@@ -20,7 +20,7 @@ const FAINT = '#71777E';
 const BRAND = '#EE1B24';
 
 /** Matches KIND_META's palette in the app, so a card looks like the Lab. */
-const KIND_HUE: Record<string, string> = {
+export const KIND_HUE: Record<string, string> = {
   entry: '#71777E',
   agent: '#4EA8FF',
   tool: '#3FD07A',
@@ -62,7 +62,7 @@ async function ensureFonts() {
   }
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -72,7 +72,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function fit(ctx: CanvasRenderingContext2D, text: string, max: number, start: number, weight: number, family: string) {
+export function fit(ctx: CanvasRenderingContext2D, text: string, max: number, start: number, weight: number, family: string) {
   let px = start;
   ctx.font = `${weight} ${px}px ${family}`;
   while (ctx.measureText(text).width > max && px > 18) {
@@ -87,7 +87,7 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number, start: nu
  * A single node, or a row of nodes with no vertical spread, would divide by
  * zero on a naive scale — hence the floor on each span.
  */
-function layout(nodes: CardRecord['graph']['nodes'], box: { x: number; y: number; w: number; h: number }) {
+export function layout(nodes: CardRecord['graph']['nodes'], box: { x: number; y: number; w: number; h: number }) {
   const xs = nodes.map(n => n.x);
   const ys = nodes.map(n => n.y);
   const minX = Math.min(...xs);
