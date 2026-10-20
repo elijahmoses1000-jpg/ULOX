@@ -4,6 +4,7 @@ import { announceChallenge, leave, listOnline, ping } from "./live";
 import { getCatalog, getStructure, getTopic } from "./roadmaps";
 import { ResourceKindId, SOURCES, getResources } from "./resources";
 import { getGlossary } from "./glossary";
+import { countRemix, getShare, listShares, publishShare, recentShares } from "./shares";
 import {
     certificateStatus,
     claimCertificate,
@@ -578,6 +579,44 @@ export const handler = router({
                 },
                 409
             );
+        },
+    ],
+
+    // --- Published builds (the distribution loop) ---------------------------
+
+    "POST /api/shares": [
+        async ({ body }) => {
+            const result = await publishShare((body ?? {}) as Record<string, unknown>);
+            if (result.ok && result.share) return json({ share: result.share });
+            if (result.reason === "too_large") return error("That graph is too large to publish", 413);
+            if (result.reason === "empty_graph") return error("There is nothing on the canvas to publish", 400);
+            return error("Could not publish that build", 500);
+        },
+    ],
+
+    "GET /api/shares": [
+        async ({ query }) => {
+            const playerId = str(query?.playerId);
+            // With a playerId this is "my builds"; without it, the public gallery.
+            if (playerId) return json({ shares: await listShares(playerId) });
+            return json({ shares: await recentShares(24) });
+        },
+    ],
+
+    "GET /api/shares/:code": [
+        async ({ params, query }) => {
+            // count=0 when the Lab loads a fork: arriving there is not a new view.
+            const share = await getShare(params.code, query?.count !== "0");
+            if (!share) return error("No published build with that code", 404);
+            return json({ share });
+        },
+    ],
+
+    "POST /api/shares/:code/remix": [
+        async ({ params }) => {
+            const remixes = await countRemix(params.code);
+            if (remixes === null) return error("No published build with that code", 404);
+            return json({ remixes });
         },
     ],
 

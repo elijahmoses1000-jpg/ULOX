@@ -20,6 +20,8 @@ import { Live } from './pages/Live';
 import { Toolkit } from './pages/Toolkit';
 import { Glossary } from './pages/Glossary';
 import { Certificates, VerifyCertificate } from './pages/Certificates';
+import { SharedBuild } from './pages/SharedBuild';
+import { Gallery } from './pages/Gallery';
 import { Book } from './pages/Book';
 import { Me } from './pages/Me';
 
@@ -56,6 +58,9 @@ export default function App() {
             <Route path="/glossary" element={<Glossary />} />
             <Route path="/certificates" element={<Certificates />} />
             <Route path="/verify/:code" element={<VerifyCertificate />} />
+            {/* Short on purpose: these links get typed, pasted and printed. */}
+            <Route path="/b/:code" element={<SharedBuild />} />
+            <Route path="/gallery" element={<Gallery />} />
             <Route path="/book" element={<Book />} />
             <Route path="/me" element={<Me />} />
             <Route path="*" element={<Navigate to="/" replace />} />

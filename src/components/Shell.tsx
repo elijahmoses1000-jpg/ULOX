@@ -5,6 +5,7 @@ import {
   BookOpen,
   Download,
   Flame,
+  GitFork,
   Home,
   LogIn,
   LogOut,
@@ -32,6 +33,7 @@ const PRIMARY = [
 ];
 
 const SECONDARY = [
+  { to: '/gallery', label: 'Published builds', icon: GitFork },
   { to: '/certificates', label: 'Certificates', icon: Award },
   { to: '/glossary', label: 'Jargon desk', icon: Search },
   { to: '/paths', label: 'Learning paths', icon: BookOpen },

@@ -1,4 +1,4 @@
-import { Check, Circle, Hammer, Lightbulb, MousePointerClick } from 'lucide-react';
+import { Check, Circle, Hammer, Lightbulb, MousePointerClick, Share2 } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { BuildTask, evaluateTask } from '../lib/build-tasks';
 
@@ -20,12 +20,14 @@ export function BuildGuide({
   stageHex,
   built,
   onMarkBuilt,
+  onShare,
 }: {
   task: BuildTask;
   graph: AgentGraph;
   stageHex: string;
   built: boolean;
   onMarkBuilt: () => void;
+  onShare?: () => void;
 }) {
   const { results, next, done, total, complete } = evaluateTask(task, graph);
 
@@ -114,9 +116,18 @@ export function BuildGuide({
 
       <div className="mt-4">
         {built && complete ? (
-          <p className="text-[12px] font-bold text-center py-2" style={{ color: stageHex }}>
-            Built ✓ — head back to the journey
-          </p>
+          // The moment someone has just finished something is the only moment
+          // they actually want to show it to anyone.
+          <div className="text-center">
+            <p className="text-[12px] font-bold py-1" style={{ color: stageHex }}>
+              Built ✓ — head back to the journey
+            </p>
+            {onShare && (
+              <button className="btn-ghost w-full !text-xs mt-1.5" onClick={onShare}>
+                <Share2 size={13} /> Share what you built
+              </button>
+            )}
+          </div>
         ) : built ? (
           // Marked built before this step had goals. Grandfather it rather than
           // taking the stage back, but do not claim the goals below are met.

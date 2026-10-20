@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { BookOpen, Bot, ChevronLeft, Hammer, MessageSquareText, Plug, X } from 'lucide-react';
+import { BookOpen, Bot, ChevronLeft, GitFork, Hammer, MessageSquareText, Plug, Share2, X } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { MockInjection } from '../lib/simulator';
 import { PATTERNS, PATTERN_BY_ID, presetGraph } from '../lib/patterns';
@@ -10,6 +10,7 @@ import { LAB_TOOL_KEY } from './Toolkit';
 import { STAGE_BY_ID, markBuilt, readBuilt } from '../lib/journey';
 import { BUILD_TASK_BY_STAGE, evaluateTask } from '../lib/build-tasks';
 import { BuildGuide } from '../components/BuildGuide';
+import { PublishDialog } from '../components/PublishDialog';
 import { Workbench } from '../components/Workbench';
 import { Chip, Modal, useToast } from '../components/ui';
 
@@ -44,6 +45,10 @@ export function Lab() {
 
   const dispatch = useLab(s => s.dispatch);
   const [pendingTool, setPendingTool] = useState<{ name: string; url: string; note: string; meta: string } | null>(null);
+  const forkCode = params.get('from');
+  const [forked, setForked] = useState<{ code: string; title: string; authorName: string } | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [score, setScore] = useState(0);
   const [mentorOpen, setMentorOpen] = useState(false);
   const [mentorText, setMentorText] = useState('');
   const [mentorLoading, setMentorLoading] = useState(false);
@@ -53,9 +58,36 @@ export function Lab() {
   const task = stage ? BUILD_TASK_BY_STAGE.get(stage.id) ?? null : null;
 
   useEffect(() => {
+    // A fork owns the canvas; loading a preset over it would throw away the
+    // build the viewer just chose to open.
+    if (forkCode) return;
     const next = task ? task.startGraph() : presetGraph(preset);
     load(next, mocksFor(next), null);
-  }, [preset, load, task]);
+  }, [preset, load, task, forkCode]);
+
+  // Opened from a published build. count=0 so arriving in the Lab does not
+  // inflate the author's view tally a second time.
+  useEffect(() => {
+    if (!forkCode) {
+      setForked(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/api/shares/${encodeURIComponent(forkCode)}?count=0`)
+      .then(res => {
+        const share = res.data?.share;
+        if (cancelled || !share) return;
+        load(share.graph, mocksFor(share.graph), null);
+        setForked({ code: share.code, title: share.title, authorName: share.authorName });
+      })
+      .catch(() => {
+        if (!cancelled) toast('That published build could not be loaded.', 'err');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [forkCode, load, toast]);
 
   // An API chosen in the Toolkit waits here until it is actually wanted —
   // dropping a node into someone's diagram uninvited would be rude.
@@ -128,7 +160,14 @@ export function Lab() {
   };
 
   const guide = stage && task && (
-    <BuildGuide task={task} graph={graph} stageHex={stage.hex} built={stageBuilt} onMarkBuilt={markStageBuilt} />
+    <BuildGuide
+      task={task}
+      graph={graph}
+      stageHex={stage.hex}
+      built={stageBuilt}
+      onMarkBuilt={markStageBuilt}
+      onShare={() => setPublishOpen(true)}
+    />
   );
 
   const reference = (
@@ -190,18 +229,25 @@ export function Lab() {
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <Bot size={15} className="text-brand shrink-0" />
-          <h1 className="text-[15px] font-extrabold truncate">Lab · {pattern?.name ?? 'Free build'}</h1>
+          <h1 className="text-[15px] font-extrabold truncate">Lab · {forked?.title ?? pattern?.name ?? 'Free build'}</h1>
         </div>
       </div>
       {/* During a journey build the switcher is hidden: every chip navigates
           away without ?stage=, which silently abandons the task and the work
           done so far. One link out, clearly labelled, is enough. */}
+      <button
+        className="ml-auto btn-ghost !px-2.5 !py-1.5 !text-[11px] shrink-0"
+        onClick={() => setPublishOpen(true)}
+        title="Publish this build and get a shareable link and card"
+      >
+        <Share2 size={12} /> Share build
+      </button>
       {task ? (
-        <Link to="/book" className="ml-auto btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0">
+        <Link to="/book" className="btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0">
           <BookOpen size={12} /> Pattern book
         </Link>
       ) : (
-        <div className="ml-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {PATTERNS.map(p => (
             <Link
               key={p.id}
@@ -255,6 +301,18 @@ export function Lab() {
           </Link>
         </div>
       )}
+      {forked && (
+        <div className="mx-3 mb-2 px-3 py-2 rounded-lg bg-ink-850 border border-ink-600 flex items-center gap-2 animate-popIn">
+          <GitFork size={14} className="text-chalk-faint shrink-0" />
+          <span className="text-[12px] text-chalk min-w-0 grow truncate">
+            Forked from <span className="font-bold">{forked.title}</span>
+            <span className="text-chalk-dim"> by {forked.authorName}</span>
+          </span>
+          <Link to={`/b/${forked.code}`} className="btn-quiet !px-2 !py-1 !text-[11px] shrink-0">
+            Original
+          </Link>
+        </div>
+      )}
       {pendingTool && (
         <div className="mx-3 mb-2 px-3 py-2 rounded-lg bg-eval-info/10 border border-eval-info/40 flex items-center gap-2 animate-popIn">
           <Plug size={14} className="text-eval-info shrink-0" />
@@ -275,7 +333,19 @@ export function Lab() {
 
   return (
     <>
-      <Workbench header={headerWithTool} brief={brief} briefLabel={guide ? 'Build' : undefined} />
+      <Workbench
+        header={headerWithTool}
+        brief={brief}
+        briefLabel={guide ? 'Build' : undefined}
+        onPositionChange={p => setScore(p.report.score)}
+      />
+      <PublishDialog
+        open={publishOpen}
+        onClose={() => setPublishOpen(false)}
+        graph={graph}
+        score={score}
+        origin={stage ? `Step ${stage.n} · ${stage.formal}` : pattern?.name ?? 'Free build'}
+      />
       <Modal open={mentorOpen} onClose={() => setMentorOpen(false)} title="AI mentor review" wide>
         {mentorLoading ? (
           <div className="space-y-2">
