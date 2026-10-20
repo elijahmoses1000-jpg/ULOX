@@ -35,6 +35,11 @@ const HEAD = 'Arial';
 const BODY = 'Arial';
 const URL = 'www.ulox.verionx.org';
 
+// Cover geometry: the photograph owns everything right of SPLIT, the type
+// column owns everything left of it, and neither crosses the other.
+const SPLIT = 576;
+const COLW = SPLIT - M - 56;
+
 // Assets sit next to the output, so the script can run from wherever the
 // node_modules happen to live.
 const ASSETS = path.resolve(process.argv[2] || '.', 'assets');
@@ -114,24 +119,26 @@ slides.push({
     'Open on the room. VerionX already has 80,000 students in Nigerian classrooms through Ulo. UloX is the next rung: agentic engineering, free, live in the browser.',
   ops: [
     rect(0, 0, W, H, INK),
-    image(photo('ikoyi-classroom.jpg'), W / 2 - 10, 0, W / 2 + 10, H),
-    // A scrim so the type holds against the photograph.
-    rect(W / 2 - 10, 0, 170, H, INK, 0, 0.92),
-    rect(W / 2 + 160, 0, W / 2 - 150, H, INK, 0, 0.28),
+    // A hard 60/40 split. The earlier version faded a photograph out behind
+    // the headline with two stacked scrims, which read as a smudge rather
+    // than a decision, and put the type on top of a moving background.
+    image(photo('cover-classroom.jpg'), SPLIT, 0, W - SPLIT, H),
+    rect(SPLIT - 4, 0, 4, H, BRAND),
     rect(0, 0, 6, H, BRAND),
-    text(M, 112, 460, 'VerionX', { size: 15, bold: true, color: BRAND, spacing: 2.4 }),
-    text(M, 150, 470, 'Building the workforce', { size: 37, bold: true, font: HEAD, lh: 1.08 }),
-    text(M, 192, 470, 'for the future.', { size: 37, bold: true, font: HEAD, lh: 1.08, color: BRAND }),
-    text(M, 266, 392, 'We exist to equip people with know-how to maximise their potential on earth.', {
+    text(M, 112, COLW, 'VerionX', { size: 15, bold: true, color: BRAND, spacing: 2.4 }),
+    text(M, 150, COLW, 'Building the workforce', { size: 37, bold: true, font: HEAD, lh: 1.08 }),
+    text(M, 192, COLW, 'for the future.', { size: 37, bold: true, font: HEAD, lh: 1.08, color: BRAND }),
+    text(M, 266, COLW, 'We exist to equip people with know-how to maximise their potential on earth.', {
       size: 13.5,
       color: DIM,
       lh: 1.5,
     }),
     line(M, 320, M + 110, 320, BRAND, 2),
-    text(M, 342, 430, 'UloX — mastering the utility of AI', { size: 16, bold: true, font: HEAD }),
-    text(M, 366, 430, 'The agentic engineering trainer. Free, and live in the browser.', { size: 11.5, color: DIM }),
-    text(M, 418, 430, URL, { size: 13, bold: true, color: BRAND }),
-    text(W - 230, H - 34, 190, 'Government College, Ikoyi', { size: 8.5, color: '#CFD3D8', align: 'right' }),
+    text(M, 342, COLW, 'UloX — mastering the utility of AI', { size: 16, bold: true, font: HEAD }),
+    text(M, 366, COLW, 'The agentic engineering trainer. Free, and live in the browser.', { size: 11.5, color: DIM }),
+    text(M, 418, COLW, URL, { size: 13, bold: true, color: BRAND }),
+    rect(SPLIT, H - 30, W - SPLIT, 30, INK, 0, 0.66),
+    text(SPLIT + 14, H - 21, W - SPLIT - 28, 'State High School', { size: 8.5, color: '#CFD3D8' }),
   ],
 });
 
@@ -191,7 +198,7 @@ slides.push({
     rect(M, 334, 3, 112, LADDER[3], 0),
     text(M + 22, 352, 380, 'VISION', { size: 9.5, bold: true, color: LADDER[3], spacing: 1.4 }),
     text(M + 22, 374, 376, 'Building the workforce for the future.', { size: 14, bold: true, font: HEAD, lh: 1.35 }),
-    ...plate(photo('ikeja-student.jpg'), M + 444, 186, 404, 150, 'Ikeja High School'),
+    ...plate(photo('mission-teaching.jpg'), M + 444, 186, 404, 150, 'Prominent Tech Learning Hub'),
     text(M + 444, 352, 404, 'WHERE EACH ONE FITS', { size: 9.5, bold: true, color: FAINT, spacing: 1.3 }),
     text(M + 444, 374, 404, 'Ulo: gamified learning for school-age Nigeria. Learn, play, practise, prove, earn.', {
       size: 11,
@@ -388,11 +395,19 @@ slides.push({
   ops: [
     rect(0, 0, W, H, INK),
     ...head('07 — Proof', 'We are past the idea stage.'),
-    ...plate(photo('owerri-assembly.jpg'), M, 126, 196, 118, 'Owerri City High School'),
-    ...plate(photo('calabar-lineup.jpg'), M + 206, 126, 196, 118, 'Holy Child, Calabar'),
-    ...plate(photo('activation-assembly.jpg'), M + 412, 126, 196, 118, 'Secondary school activation'),
-    ...plate(photo('community-outreach.jpg'), M + 618, 126, 230, 118, 'Community drive, Lagos'),
-    text(M, 262, 560, 'ULO — WHAT THE OUTREACH HAS REACHED', { size: 9.5, bold: true, color: GOLD, spacing: 1.3 }),
+    // Four equal boxes on the same grid. The previous row ran 196, 196, 196,
+    // 230, which read as a mistake because it was one.
+    ...(() => {
+      const c = cols(4, 16);
+      const shots = [
+        ['proof-owerri.jpg', 'Owerri City High School'],
+        ['proof-calabar.jpg', 'Holy Child, Calabar'],
+        ['proof-statehigh.jpg', 'State High School'],
+        ['proof-community.jpg', 'Community drive, Lagos'],
+      ];
+      return shots.flatMap(([file, caption], i) => plate(photo(file), c[i].x, 126, c[i].w, 124, caption));
+    })(),
+    text(M, 268, 560, 'ULO — WHAT THE OUTREACH HAS REACHED', { size: 9.5, bold: true, color: GOLD, spacing: 1.3 }),
     ...(() => {
       const c = cols(5, 14);
       const items = [
@@ -402,7 +417,7 @@ slides.push({
         ['1.2M+', 'teachers via Nigeria Teachers'],
         ['100+', 'student ambassadors'],
       ];
-      return items.flatMap(([v, l], i) => stat(c[i].x, 284, c[i].w, v, l, GOLD, 24));
+      return items.flatMap(([v, l], i) => stat(c[i].x, 290, c[i].w, v, l, GOLD, 24));
     })(),
     line(M, 356, W - M, 356, LINE, 1),
     text(M, 368, 560, 'ULOX — WHAT IS LIVE TODAY', { size: 9.5, bold: true, color: BRAND, spacing: 1.3 }),
@@ -515,8 +530,10 @@ slides.push({
   notes: 'Close on the room, and send them to the live product.',
   ops: [
     rect(0, 0, W, H, INK),
-    image(photo('ikoyi-engaged.jpg'), 0, 0, W, H),
-    rect(0, 0, W, H, INK, 0, 0.74),
+    image(photo('close-assembly.jpg'), 0, 0, W, H),
+    rect(0, 0, W, H, INK, 0, 0.86),
+    // An extra wash on the left so the headline sits on near-solid ink.
+    rect(0, 0, 620, H, INK, 0, 0.45),
     rect(0, 0, 6, H, BRAND),
     ...LADDER.map((c, i) => rect(M + i * 30, 96, 20, 6, c, 3)),
     text(M, 132, 740, 'The future of learning is not', { size: 38, bold: true, font: HEAD, lh: 1.12 }),
