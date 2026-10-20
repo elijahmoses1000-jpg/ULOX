@@ -11,19 +11,25 @@ import { Console, MoveList } from './RunPanel';
 import { Tabs, useToast } from './ui';
 import { useT } from './Level';
 
-type Pane = 'eval' | 'edit' | 'run' | 'moves';
+type Pane = 'brief' | 'eval' | 'edit' | 'run' | 'moves';
 
 export interface WorkbenchProps {
   /** Rendered above the graph on every breakpoint. */
   header: React.ReactNode;
-  /** Rendered in the left column on desktop and inside the Eval pane on mobile. */
+  /** Rendered in the left column on desktop, and in its own pane on mobile. */
   brief?: React.ReactNode;
+  /**
+   * Names the brief's own mobile tab and makes it the pane people land on.
+   * A build task passes "Build" so the checklist is the first thing on screen
+   * instead of being buried behind a score people have not met yet.
+   */
+  briefLabel?: string;
   onPositionChange?: (position: Position) => void;
   onHint?: () => void;
   hintsUsed?: number;
 }
 
-export function Workbench({ header, brief, onPositionChange, onHint, hintsUsed = 0 }: WorkbenchProps) {
+export function Workbench({ header, brief, briefLabel, onPositionChange, onHint, hintsUsed = 0 }: WorkbenchProps) {
   const graph = useLab(s => s.graph);
   const mocks = useLab(s => s.mocks);
   const puzzle = useLab(s => s.puzzle);
@@ -41,7 +47,7 @@ export function Workbench({ header, brief, onPositionChange, onHint, hintsUsed =
 
   const toast = useToast();
   const t = useT();
-  const [pane, setPane] = useState<Pane>('edit');
+  const [pane, setPane] = useState<Pane>(briefLabel ? 'brief' : 'edit');
   const [playhead, setPlayhead] = useState(0);
   const [running, setRunning] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -198,11 +204,20 @@ export function Workbench({ header, brief, onPositionChange, onHint, hintsUsed =
         </div>
       )}
 
-      <div className="grow min-h-0 grid grid-rows-[auto_1fr] lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[260px_minmax(0,1fr)_340px] gap-2 px-2 pb-2">
+      {/* The brief column appears from lg, not xl: on a 1024–1279px laptop the
+          build checklist was being hidden entirely, which is the one thing on
+          this screen nobody can afford to lose. */}
+      <div
+        className={`grow min-h-0 grid grid-rows-[auto_1fr] lg:grid-rows-1 gap-2 px-2 pb-2 ${
+          brief
+            ? 'lg:grid-cols-[250px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_340px]'
+            : 'lg:grid-cols-[minmax(0,1fr)_340px]'
+        }`}
+      >
         {brief && (
-          <aside className="hidden xl:flex flex-col panel overflow-hidden min-h-0">
+          <aside className="hidden lg:flex flex-col panel overflow-hidden min-h-0">
             <div className="overflow-y-auto grow min-h-0">{brief}</div>
-            <div className="h-56 border-t border-ink-700 min-h-0">{movesPane}</div>
+            <div className="h-48 xl:h-56 border-t border-ink-700 min-h-0">{movesPane}</div>
           </aside>
         )}
 
@@ -239,6 +254,7 @@ export function Workbench({ header, brief, onPositionChange, onHint, hintsUsed =
             active={pane}
             onChange={setPane}
             tabs={[
+              ...(briefLabel ? [{ id: 'brief' as Pane, label: briefLabel }] : []),
               { id: 'eval', label: `${t('score')} ${position.report.score >= 0 ? '+' : ''}${position.report.score.toFixed(1)}` },
               { id: 'edit', label: 'Edit' },
               { id: 'run', label: t('run') },
@@ -246,9 +262,10 @@ export function Workbench({ header, brief, onPositionChange, onHint, hintsUsed =
             ]}
           />
           <div className="panel grow min-h-[34vh] overflow-hidden flex flex-col">
+            {pane === 'brief' && <div className="overflow-y-auto grow min-h-0">{brief}</div>}
             {pane === 'eval' && (
               <div className="overflow-y-auto grow min-h-0">
-                {brief && <div className="border-b border-ink-700">{brief}</div>}
+                {brief && !briefLabel && <div className="border-b border-ink-700">{brief}</div>}
                 <div className="min-h-[40vh] flex flex-col">{evalPane}</div>
               </div>
             )}

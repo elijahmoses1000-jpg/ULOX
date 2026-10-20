@@ -8,6 +8,8 @@ import { PATTERNS, PATTERN_BY_ID, presetGraph } from '../lib/patterns';
 import { useLab } from '../lib/store';
 import { LAB_TOOL_KEY } from './Toolkit';
 import { STAGE_BY_ID, markBuilt, readBuilt } from '../lib/journey';
+import { BUILD_TASK_BY_STAGE, evaluateTask } from '../lib/build-tasks';
+import { BuildGuide } from '../components/BuildGuide';
 import { Workbench } from '../components/Workbench';
 import { Chip, Modal, useToast } from '../components/ui';
 
@@ -46,11 +48,14 @@ export function Lab() {
   const [mentorText, setMentorText] = useState('');
   const [mentorLoading, setMentorLoading] = useState(false);
   const pattern = PATTERN_BY_ID.get(preset ?? 'react');
+  // Arriving from a journey step loads the *task* — the pattern with the pieces
+  // that step teaches removed — rather than the finished answer.
+  const task = stage ? BUILD_TASK_BY_STAGE.get(stage.id) ?? null : null;
 
   useEffect(() => {
-    const next = presetGraph(preset);
+    const next = task ? task.startGraph() : presetGraph(preset);
     load(next, mocksFor(next), null);
-  }, [preset, load]);
+  }, [preset, load, task]);
 
   // An API chosen in the Toolkit waits here until it is actually wanted —
   // dropping a node into someone's diagram uninvited would be rude.
@@ -109,7 +114,24 @@ export function Lab() {
     }
   };
 
-  const brief = (
+  const markStageBuilt = () => {
+    if (!stage || !task) return;
+    // Belt and braces: the button is only rendered when the goals pass, but the
+    // flag feeds a certificate, so re-derive it here rather than trusting the UI.
+    if (!evaluateTask(task, graph).complete) {
+      toast('Not all goals are met yet — the checklist shows what is left.', 'err');
+      return;
+    }
+    markBuilt(stage.id);
+    setStageBuilt(true);
+    toast('Step built. Head back to the journey for what is next.', 'ok');
+  };
+
+  const guide = stage && task && (
+    <BuildGuide task={task} graph={graph} stageHex={stage.hex} built={stageBuilt} onMarkBuilt={markStageBuilt} />
+  );
+
+  const reference = (
     <div className="p-4">
       <div className="flex items-center gap-2 mb-2">
         <Chip tone="brand">{pattern?.code ?? 'A00'}</Chip>
@@ -144,6 +166,22 @@ export function Lab() {
     </div>
   );
 
+  // On a journey build the checklist leads and the pattern notes follow it;
+  // a free build has no task, so the notes are all there is.
+  const brief = guide ? (
+    <>
+      {guide}
+      <details className="border-t border-ink-700">
+        <summary className="px-4 py-2.5 text-[11.5px] font-semibold text-chalk-dim cursor-pointer select-none hover:text-chalk">
+          How this pattern works, and what usually goes wrong
+        </summary>
+        {reference}
+      </details>
+    </>
+  ) : (
+    reference
+  );
+
   const header = (
     <div className="px-3 pt-3 pb-2 flex items-center gap-2 flex-wrap">
       <Link to="/book" className="btn-quiet !px-2 !py-1.5 lg:hidden">
@@ -155,26 +193,38 @@ export function Lab() {
           <h1 className="text-[15px] font-extrabold truncate">Lab · {pattern?.name ?? 'Free build'}</h1>
         </div>
       </div>
-      <div className="ml-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-        {PATTERNS.map(p => (
-          <Link
-            key={p.id}
-            to={`/lab/${p.id}`}
-            onClick={() => toast(`Loaded ${p.name}`, 'info')}
-            className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition
-              ${p.id === (preset ?? 'react') ? 'bg-brand text-white border-brand' : 'bg-ink-850 text-chalk-dim border-ink-700 hover:text-chalk'}`}
-          >
-            {p.code}
-          </Link>
-        ))}
-        <Link
-          to="/lab/blank"
-          className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition
-            ${preset === 'blank' ? 'bg-brand text-white border-brand' : 'bg-ink-850 text-chalk-dim border-ink-700 hover:text-chalk'}`}
-        >
-          blank
+      {/* During a journey build the switcher is hidden: every chip navigates
+          away without ?stage=, which silently abandons the task and the work
+          done so far. One link out, clearly labelled, is enough. */}
+      {task ? (
+        <Link to="/book" className="ml-auto btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0">
+          <BookOpen size={12} /> Pattern book
         </Link>
-      </div>
+      ) : (
+        <div className="ml-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {PATTERNS.map(p => (
+            <Link
+              key={p.id}
+              to={`/lab/${p.id}`}
+              onClick={() => toast(`Loaded ${p.name}`, 'info')}
+              title={p.name}
+              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition
+                ${p.id === (preset ?? 'react') ? 'bg-brand text-white border-brand' : 'bg-ink-850 text-chalk-dim border-ink-700 hover:text-chalk'}`}
+            >
+              {/* The code meant nothing to anyone who had not read the book. */}
+              {p.name.split(/[ /]/)[0]}
+            </Link>
+          ))}
+          <Link
+            to="/lab/blank"
+            title="Start from an empty canvas"
+            className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition
+              ${preset === 'blank' ? 'bg-brand text-white border-brand' : 'bg-ink-850 text-chalk-dim border-ink-700 hover:text-chalk'}`}
+          >
+            Blank
+          </Link>
+        </div>
+      )}
     </div>
   );
 
@@ -194,16 +244,11 @@ export function Lab() {
           {stageBuilt ? (
             <span className="text-[11px] font-bold text-eval-up shrink-0">Built ✓</span>
           ) : (
-            <button
-              className="btn-primary !px-2.5 !py-1 !text-[11px] shrink-0"
-              onClick={() => {
-                markBuilt(stage.id);
-                setStageBuilt(true);
-                toast('Step marked as built. Head back to the journey for what is next.', 'ok');
-              }}
-            >
-              Mark built
-            </button>
+            // The goal counter lives here; the button that acts on it lives in
+            // the checklist, beside the goals that justify it.
+            <span className="text-[11px] font-bold font-mono shrink-0" style={{ color: stage.hex }}>
+              {task ? `${evaluateTask(task, graph).done}/${task.goals.length}` : ''}
+            </span>
           )}
           <Link to={`/journey/${stage.id}`} className="btn-quiet !px-2 !py-1 !text-[11px] shrink-0">
             Back to step
@@ -230,7 +275,7 @@ export function Lab() {
 
   return (
     <>
-      <Workbench header={headerWithTool} brief={brief} />
+      <Workbench header={headerWithTool} brief={brief} briefLabel={guide ? 'Build' : undefined} />
       <Modal open={mentorOpen} onClose={() => setMentorOpen(false)} title="AI mentor review" wide>
         {mentorLoading ? (
           <div className="space-y-2">

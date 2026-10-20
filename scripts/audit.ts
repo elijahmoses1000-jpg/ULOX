@@ -11,6 +11,7 @@ import { PUZZLES, PUZZLE_BY_ID } from '../src/lib/puzzles';
 import { ALL_TOPICS, ROADMAPS, TOPIC_BY_ID } from '../src/lib/curriculum';
 import { PATTERN_BY_ID } from '../src/lib/patterns';
 import { STAGES } from '../src/lib/journey';
+import { BUILD_TASKS, BUILD_TASK_BY_STAGE, evaluateTask } from '../src/lib/build-tasks';
 import { CHEATSHEET_INDEX } from '../backend/cheatsheet-index';
 import { STAGE_REQUIREMENTS } from '../backend/certificates';
 
@@ -266,6 +267,67 @@ ok(`${PUZZLES.length} tactics and ${ALL_TOPICS.length} curated topics cross-refe
 
   if (!problems.length) {
     ok(`certificates: ${Object.keys(STAGE_REQUIREMENTS).length} tracks mirror the journey exactly`);
+  }
+}
+
+// --- 5e. Every build task is completable, and not already complete ------------
+// The Build screen's goals are checked live against the canvas, so a goal that
+// no graph can satisfy would strand a learner at the last step of a stage with
+// no way forward — and the stage gates a certificate. Prove it the way
+// verify.ts proves a puzzle: the finished pattern must satisfy every goal, and
+// the starting graph must not, or there is nothing to build.
+{
+  const stageIds = new Set(STAGES.map(s => s.id));
+  for (const stage of STAGES) {
+    if (!BUILD_TASK_BY_STAGE.has(stage.id)) {
+      fail(`journey stage "${stage.id}" has a build step but no build task`);
+    }
+  }
+
+  for (const task of BUILD_TASKS) {
+    if (!stageIds.has(task.stage)) {
+      fail(`build task targets unknown stage "${task.stage}"`);
+      continue;
+    }
+    const stage = STAGES.find(s => s.id === task.stage)!;
+    if (stage.build !== task.pattern) {
+      fail(`build task for "${task.stage}" targets pattern "${task.pattern}", journey says "${stage.build}"`);
+    }
+    if (!task.goals.length) fail(`build task "${task.stage}" has no goals`);
+
+    const ids = task.goals.map(g => g.id);
+    if (new Set(ids).size !== ids.length) fail(`build task "${task.stage}" has duplicate goal ids`);
+
+    // The task must start unfinished...
+    const start = task.startGraph();
+    const startDone = evaluateTask(task, start);
+    if (startDone.complete) {
+      fail(`build task "${task.stage}" is already complete on load — there is nothing to build`);
+    }
+
+    // ...and the canonical pattern must finish it.
+    const finished = task.pattern === 'blank' ? null : PATTERN_BY_ID.get(task.pattern)?.graph ?? null;
+    if (finished) {
+      const unmet = task.goals.filter(g => {
+        try {
+          return !g.check(finished);
+        } catch (err) {
+          fail(`build goal "${task.stage}/${g.id}" threw: ${(err as Error).message}`);
+          return true;
+        }
+      });
+      if (unmet.length) {
+        fail(
+          `build task "${task.stage}" is unreachable: the finished ${task.pattern} pattern fails ` +
+            `${unmet.map(g => `"${g.id}"`).join(', ')}`,
+        );
+      }
+    }
+  }
+
+  if (!problems.length) {
+    const goals = BUILD_TASKS.reduce((a, t) => a + t.goals.length, 0);
+    ok(`build tasks: ${BUILD_TASKS.length} stages, ${goals} goals, every one reachable and none pre-solved`);
   }
 }
 
