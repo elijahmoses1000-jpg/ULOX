@@ -1,0 +1,26 @@
+{
+  "name": "UloX by VerionX",
+  "short_name": "UloX",
+  "description": "Learn agentic engineering the way chess players get good: build agent graphs, run them, and read the eval bar.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0E0F11",
+  "theme_color": "#0E0F11",
+  "categories": ["education", "developer", "productivity"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

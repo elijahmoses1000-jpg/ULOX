@@ -1,0 +1,14 @@
+{
+  "methods": ["google", "apple", "x"],
+  "headline": "Sign in to UloX",
+  "subtitle": "Keep your rating, streak and roadmap progress on every device — and play rated matches against other engineers.",
+  "style": {
+    "mode": "dark",
+    "accentColor": "#EE1B24",
+    "backgroundColor": "#0E0F11",
+    "panelColor": "#191A1D",
+    "textColor": "#E9EBEE",
+    "fontFamily": "Inter, Segoe UI, system-ui, sans-serif",
+    "borderRadius": 12
+  }
+}

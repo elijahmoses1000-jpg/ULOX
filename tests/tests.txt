@@ -1,0 +1,79 @@
+# Tests
+
+## Test 1 - A new arrival is told exactly what to do, and does it [sanity]
+Viewport: desktop
+Covers: first-run onboarding, the six-discipline journey, next-step guidance, curriculum reading, progress persistence
+Description: Verifies a confused first-time visitor is given one next action and that completing it sticks.
+
+Steps:
+1. Read the welcome screen and click "Makes sense"
+2. Choose "Beginner" and click "Next"
+3. Click "Start the journey"
+4. Click the "Read this" button on the next-step card
+5. Click "Got it" in the dialog that opens
+6. Refresh the page
+
+Expected: The journey home shows a next step naming a step number out of 6, and after the refresh step 1 "Ask properly" shows at least 1 of its readings complete.
+
+## Test 2 - Switching skill level rewrites the interface
+Viewport: desktop
+Covers: level switcher control, glossary-driven wording, persistence of the chosen level
+Description: Verifies the level toggle visibly changes vocabulary rather than only storing a preference.
+
+Steps:
+1. Click "Skip" on the welcome screen, then open "Practice" from the navigation and note the page heading
+2. Open the skill level control in the header and choose "Advanced"
+3. Return to "Practice"
+
+Expected: The Practice page heading reads "Puzzles" while Beginner is selected and reads "Tactics" once Advanced is selected.
+
+## Test 3 - Two players race a rated match and chat
+Viewport: desktop
+Covers: match creation, join-by-code, answer submission and score sync, match chat across actors, realtime room updates
+Description: Verifies the multiplayer room connects two separate clients and keeps their boards in step.
+
+Steps:
+1. As Actor A, click "Skip" on the welcome screen, open "Match a friend" and click "Create match", then note the six-character match code
+2. As Actor B, click "Skip" on the welcome screen, open "Match a friend", enter that match code and click "Join"
+3. As Actor B, choose any one of the four candidate moves on the first position
+4. As Actor A, type "Good luck" into the match chat and send it
+
+Expected: Actor A's screen shows Actor B as the opponent instead of "Waiting…", Actor B's progress reads 1 of 5, and the message "Good luck" is visible in Actor B's match chat.
+
+## Test 4 - Find a real API in the Toolkit and review it in the Lab
+Viewport: desktop
+Covers: resource library endpoint, live GitHub-sourced catalogue, cross-page tool hand-off, AI mentor review
+Description: Verifies the resource collections load and that a chosen API becomes a usable tool in the builder.
+
+Steps:
+1. Click "Skip" on the welcome screen, then open "Toolkit" from the navigation
+2. Type "weather" into the search field
+3. On the first result, click "Use in Lab"
+4. On the Lab screen, click "Add it"
+5. Click "Ask the AI mentor"
+
+Expected: The Lab shows the chosen API name in its diagram after "Add it" is clicked, and the mentor dialog displays at least one line of review text.
+
+## Test 5 - A bad match code is rejected
+Viewport: mobile
+Covers: join validation guardrail, user-visible error state, no navigation on failure
+Description: Verifies an unusable match code fails loudly instead of opening an empty room.
+
+QA Faults:
+```json
+[
+  {
+    "method": "POST",
+    "path": "/api/rooms/join",
+    "status": 404,
+    "body_json": { "error": "No open match with that code" }
+  }
+]
+```
+
+Steps:
+1. Click "Skip" on the welcome screen, then open "Match a friend"
+2. Type "ZZZZZZ" into the "Join a match" field
+3. Click "Join"
+
+Expected: A visible error message about the match code is shown and the match screen is still displayed.
