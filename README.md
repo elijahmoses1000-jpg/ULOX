@@ -86,10 +86,19 @@ asserts that every `/api/admin/*` route calls `adminGate` before doing anything.
 
 ## Launch videos
 
-`brag-output/` holds six 1080×1080 MP4s built with
-[`/brag`](https://github.com/latent-spaces/brag), one per angle, each with a
-poster and share copy. `brag-output/brag-plan.md` documents the creative plan
-and how to rebuild them.
+`brag-output/` holds **21** 1080×1080 MP4s built with
+[`/brag`](https://github.com/latent-spaces/brag) — a core six on what UloX is,
+ten on how its mechanisms work, and five on what sits underneath — each with a
+matching JPG poster (also embedded as the MP4's cover image) and a written
+caption in `share-copy.txt`.
+
+Every product shot is a real screenshot of the deployed app, and every frame is
+a pure function of time, so any frame can be re-rendered on its own.
+`brag-output/brag-plan.md` documents what each video argues and how to rebuild
+the set.
+
+The videos close on **www.ulox.verionx.org**, which needs the custom domain
+attached before they are published.
 
 ## Content, pulled live
 

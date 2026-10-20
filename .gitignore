@@ -6,9 +6,14 @@ dist-ssr/
 scripts/payload.json
 scripts/audit.mjs
 
-# Launch-video intermediates: ~3,000 PNG frames and the source screenshots are
+# Launch-video intermediates: ~10,000 frames and the source screenshots are
 # rebuildable from brag-output/brag-plan.md. The MP4s and posters are kept.
 brag-output/work/
+
+# The master zip is just the tracked MP4s, posters and docs in one file.
+# Committing it would double the repository for no gain; rebuild it with
+# package-zip.mjs when a copy is needed.
+brag-output/ulox-launch-videos.zip
 
 *.local
 .env

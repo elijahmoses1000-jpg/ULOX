@@ -1,0 +1,146 @@
+UloX by VerionX — share copy for 21 launch videos
+All 1080x1080 MP4. Post each caption with its matching file.
+www.ulox.verionx.org
+
+=============================================================================
+THE CORE SIX — start here
+=============================================================================
+
+--- 01-what-is-ulox.mp4 -----------------------------------------------------
+Getting a model to answer is the easy part. Getting a system to keep working is
+the job nobody teaches. UloX hands you 18 broken agent systems and asks you to
+repair them — prompt, context, harness, loop, graph, agentic, in that order.
+
+--- 02-fix-the-break.mp4 ----------------------------------------------------
+Every drill in UloX starts already broken. An agent that never stops. A router
+with two branches that both match. A guard that logs and lets it through. You
+get a limited number of moves, and a beam search is looking for the repair too
+— so the hint is a real line of play, not a nudge.
+
+--- 03-six-disciplines.mp4 --------------------------------------------------
+"Prompt engineering" is one sixth of the job. The other five: context, harness,
+loop, graph, agentic. UloX teaches them in that order because each one is
+useless without the last — a loop you cannot stop is usually a context problem
+wearing a different hat.
+
+--- 04-play-someone.mp4 -----------------------------------------------------
+You can play someone. Rated matches on UloX deal both sides the identical five
+broken systems, so nobody gets the easier board — and your Glicko-2 rating
+moves on the result. There is a live map of who is online, opt-in, rounded to
+about 11km on your own device before it is ever sent.
+
+--- 05-certificates.mp4 -----------------------------------------------------
+Finish a discipline on UloX — read it, fix every drill, build the thing — and
+you get a certificate with a code anyone can check on a public page. Download
+it as a PDF for printing or a JPG for posting. Both carry the verification
+link, so the proof travels with the image.
+
+--- 06-the-library.mp4 ------------------------------------------------------
+250 terms in plain words. 154 one-page field notes. 94 learning roadmaps with
+their real wiring, where every node opens its own topic and its videos. UloX
+fetches and parses all of it from source, so you stop hunting through tabs.
+
+=============================================================================
+THE MECHANISMS — how it actually works
+=============================================================================
+
+--- 07-itols.mp4 ------------------------------------------------------------
+Most prompts are prose with hope in them. UloX makes you write a contract
+instead: Identity, Tasks, Outcome, Language, Security. Five fields you can
+diff, test and grade — because a prompt you cannot test is not engineering.
+
+--- 08-the-eval-bar.mp4 -----------------------------------------------------
+Chess players have known for decades that every position has a score. UloX puts
+the same bar on your agent: one number, -9.9 to +9.9, recomputed on every move
+by a simulator rather than an opinion. You stop guessing whether your fix made
+it better.
+
+--- 09-install-it.mp4 -------------------------------------------------------
+No download, no app store. UloX installs straight from the browser onto your
+phone, tablet or desktop, and still opens when the signal goes. Sign in and
+your rating, streak and progress follow you to any device.
+
+--- 10-jargon-desk.mp4 ------------------------------------------------------
+You hit a word you do not know, and six tabs later you have lost the thread.
+UloX has a jargon desk built in: 250 terms in plain words — what it means, why
+it matters, what people confuse it with. Type "RAG", get Retrieval-Augmented
+Generation. The short forms are indexed too.
+
+--- 11-roadmaps.mp4 ---------------------------------------------------------
+94 learning roadmaps, and every node is live — tap one for its explanation, its
+resources and its videos without leaving the map. Fetched from source along
+with the edge geometry, which is why the paths actually connect.
+
+--- 12-three-levels.mp4 -----------------------------------------------------
+Most tools are written for the people who built them. UloX asks where you are —
+beginner, intermediate or advanced — and changes the wording, not just the
+colour. Same drills, explained the way you need them explained. Switch any
+time; nothing resets.
+
+--- 13-the-lab.mp4 ----------------------------------------------------------
+Once you can fix a broken agent, build one from nothing. Drag the nodes, wire
+the edges, run it — graded by the same simulator that grades the drills. Every
+discipline ends with a build, which is what the certificate actually means.
+
+--- 14-puzzle-rush.mp4 ------------------------------------------------------
+Three minutes. How many broken agent systems can you fix in a row? One wrong
+move ends the run. Recognition is the real skill — seeing "this is a retry
+storm" in two seconds is what separates reading about it from knowing it.
+
+--- 15-the-hint.mp4 ---------------------------------------------------------
+Most hints are a sentence someone typed in advance. UloX searches the position
+and hands you the first move of a solution it actually found — the way a chess
+engine shows a line. It cannot point you somewhere that does not work.
+
+--- 16-rating-and-streak.mp4 ------------------------------------------------
+"I think I'm getting better" is not good enough. Chess solved this in 1960.
+UloX gives you a Glicko-2 rating that moves on what you actually solved, with a
+confidence interval so a lucky run does not inflate it.
+
+=============================================================================
+THE DEPTH — what is underneath
+=============================================================================
+
+--- 17-make-it-safe.mp4 -----------------------------------------------------
+Your agent reads a poisoned document. Your guard noticed and let it through
+anyway — guard theatre is the most common agent vulnerability there is. UloX
+drills prompt injection, excessive agency, unbounded delegation and budget
+blindness until bounded, observable and fail-safe are habits.
+
+--- 18-field-notes.mp4 ------------------------------------------------------
+You know the idea; you forgot the detail. 154 one-page field notes on agent
+harnesses, state machines, MCP, A2A, benchmarks, evals and retrieval —
+eighteen of them wired directly into the six stages, so the reference appears
+at the moment you need it.
+
+--- 19-open-libraries.mp4 ---------------------------------------------------
+Everyone bookmarks the big repos. Nobody opens them again, because a
+400,000-word README is not a tool. UloX parses eight of them — public APIs,
+build-your-own-x, free programming books, awesome, freeCodeCamp — into
+something searchable, and falls back to upstream if a fork goes quiet.
+
+--- 20-one-next-step.mp4 ----------------------------------------------------
+People do not quit learning because it is hard. They quit because forty tabs
+are open and none of them is obviously next. UloX shows you one thing: read
+this, or fix this, or build this. Finish it and the next one appears.
+
+--- 21-who-its-for.mp4 ------------------------------------------------------
+Everyone can call a model now, which is exactly the problem — almost nobody can
+make one reliable. UloX is for engineers shipping their first agent, teams
+whose agent works on Tuesdays, and anyone who was handed "add AI to it". Free,
+open, and in your browser.
+
+=============================================================================
+POSTING NOTES
+=============================================================================
+
+Each MP4 has a matching .jpg poster, also embedded as the video's cover image.
+Use the .jpg anywhere a platform wants a thumbnail or a still.
+
+Suggested order: post the core six first (01-06), then the mechanisms
+(07-16) as a weekly series, then the depth three (17-19), and close with
+20 and 21.
+
+CREDITS (required if you post these)
+Music: "Happy Beats / Business Moves" by ende.app — https://ende.app/en
+Videos built with /brag — https://github.com/latent-spaces/brag
