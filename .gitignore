@@ -24,3 +24,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 .vite/
+
+# Sample exports produced for review, not part of the app.
+samples/

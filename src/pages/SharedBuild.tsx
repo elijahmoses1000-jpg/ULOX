@@ -409,6 +409,8 @@ export function SharedBuild() {
         busy={busy}
         nativeLabel="Share with the card image"
         nativeNote="Sends the 1080×1080 card as a file wherever your device can — messages, notes, anywhere."
+        blurb="Anyone with this link can open the build, replay its run and fork it into their own Lab. No account needed to look."
+        fileNoun="card image"
         onNativeShare={() => {
           setSheet(null);
           void exportCard('share');
@@ -425,6 +427,8 @@ export function SharedBuild() {
         text={`Watch ${record.title} run — built on UloX`}
         busy={recording}
         nativeLabel={`Share the ${(recFormat ?? 'video').toUpperCase()} recording`}
+        blurb="The link opens the build and replays this run step by step. No account needed to watch."
+        fileNoun="recording"
         nativeNote={`Records the run at ${RECORDING_SIZE.width}×${RECORDING_SIZE.height} first, then hands the file to your device's share sheet.`}
         onNativeShare={() => {
           setSheet(null);

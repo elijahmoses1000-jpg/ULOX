@@ -5,6 +5,7 @@ import { Award, Check, Copy, Download, FileText, Image, Lock, Printer, Share2, S
 import { STAGE_BY_ID } from '../lib/journey';
 import { useProfile } from '../lib/profile';
 import { Card, Chip, Logo, Modal, useToast } from '../components/ui';
+import { ShareSheet } from '../components/ShareSheet';
 import {
   CertificateData,
   certificateBlobs,
@@ -305,6 +306,7 @@ export function VerifyCertificate() {
   const [cert, setCert] = useState<Held | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'missing'>('loading');
   const [busy, setBusy] = useState<'jpg' | 'pdf' | 'share' | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -341,7 +343,7 @@ export function VerifyCertificate() {
         const shared = await shareCertificate(cert, jpeg);
         if (!shared) {
           download(jpeg, `${stem}.jpg`);
-          toast('Sharing is not available here — the image was downloaded instead.', 'info');
+          toast('Your device cannot attach a file — the image was downloaded instead. Post it with the link.', 'info');
         }
       }
     } catch {
@@ -437,8 +439,8 @@ export function VerifyCertificate() {
       </article>
 
       <div className="flex items-center justify-center gap-2 mt-5 flex-wrap print:hidden">
-        <button className="btn-primary !text-xs" onClick={() => exportAs('share')} disabled={!!busy}>
-          <Share2 size={13} /> {busy === 'share' ? 'Preparing…' : 'Share'}
+        <button className="btn-primary !text-xs" onClick={() => setSheetOpen(true)}>
+          <Share2 size={13} /> Share
         </button>
         <button className="btn-ghost !text-xs" onClick={() => exportAs('pdf')} disabled={!!busy}>
           <FileText size={13} /> {busy === 'pdf' ? 'Building…' : 'PDF'}
@@ -468,6 +470,26 @@ export function VerifyCertificate() {
         <Download size={11} className="inline -mt-0.5 mr-1" />
         The PDF prints on A4; the JPG is sized for LinkedIn, X and WhatsApp. Both carry the verification link.
       </p>
+
+      {/* Anywhere, not just wherever this device happens to have a share
+          sheet. The link is what travels — it resolves to a page that checks
+          the certificate against the record, which an image alone cannot. */}
+      <ShareSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title="Share this certificate"
+        url={verifyUrl(cert.code)}
+        text={`I completed ${cert.trackTitle} on UloX.`}
+        busy={busy === 'share'}
+        nativeLabel="Share with the certificate image"
+        nativeNote="Attaches the JPG itself wherever your device can — messages, email, anywhere that takes a file."
+        blurb="The link opens this certificate and checks it against the UloX record, so whoever you send it to can confirm it rather than take your word for it."
+        fileNoun="certificate image"
+        onNativeShare={() => {
+          setSheetOpen(false);
+          void exportAs('share');
+        }}
+      />
 
       <p className="text-center text-[11.5px] text-chalk-faint mt-3 print:hidden">
         Verified against UloX records. A certificate of completion on this platform, not an accredited qualification.

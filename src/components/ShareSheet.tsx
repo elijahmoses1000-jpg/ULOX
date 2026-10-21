@@ -82,6 +82,10 @@ export function ShareSheet({
   onNativeShare,
   nativeLabel = 'Share the file',
   nativeNote,
+  /** One line on what the link gives whoever opens it. */
+  blurb = 'Anyone with this link can open it. No account needed to look.',
+  /** What the attachable file is, named in the closing line. */
+  fileNoun = 'file',
   busy,
 }: {
   open: boolean;
@@ -92,6 +96,8 @@ export function ShareSheet({
   onNativeShare?: () => void;
   nativeLabel?: string;
   nativeNote?: string;
+  blurb?: string;
+  fileNoun?: string;
   busy?: boolean;
 }) {
   const toast = useToast();
@@ -110,9 +116,7 @@ export function ShareSheet({
 
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <p className="text-[13px] text-chalk-dim leading-relaxed">
-        Anyone with this link can open it, run it and fork it. No account needed to look.
-      </p>
+      <p className="text-[13px] text-chalk-dim leading-relaxed">{blurb}</p>
 
       <div className="panel-flat px-3 py-2.5 mt-3 flex items-center gap-2">
         <Link2 size={13} className="text-chalk-faint shrink-0" />
@@ -151,8 +155,8 @@ export function ShareSheet({
       </div>
 
       <p className="text-[11px] text-chalk-faint mt-3.5 leading-relaxed">
-        These open the network with the link already filled in. A post carries the link, not the video file — use
-        the share button above, or download the recording, to attach the video itself.
+        These open the network with the link already filled in. A post carries the link, not the {fileNoun} — use the
+        button above, or download it, to attach the {fileNoun} itself.
       </p>
     </Modal>
   );
