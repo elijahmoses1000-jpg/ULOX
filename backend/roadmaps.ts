@@ -30,7 +30,7 @@ const STRUCTURE_TTL = 12 * 60 * 60 * 1000;
 // 3: roadmap.sh's own promotion stripped, empty containers dropped, and
 // @currentYear@ resolved. Bumped so cached structures are rebuilt rather than
 // served stale until the TTL runs out.
-const STRUCTURE_VERSION = 3;
+const STRUCTURE_VERSION = 4;
 
 export interface SlimNode {
     id: string;
@@ -169,10 +169,40 @@ export async function getCatalog(force = false): Promise<{ roadmaps: CatalogEntr
 // related roadmaps. Upstream they sit beside the content; rendered here they
 // read as part of the path, and because they sit far out to one side they
 // stretched the bounding box so the actual topics were drawn small.
-const RENDERABLE = new Set(["topic", "subtopic", "title", "section", "label", "paragraph"]);
+const RENDERABLE = new Set([
+    "topic",
+    "subtopic",
+    "todo",
+    "title",
+    "section",
+    "label",
+    "paragraph",
+    "horizontal",
+    "vertical",
+]);
 
-/** Containers: useful only when something survives inside them. */
-const CONTAINERS = new Set(["section", "label"]);
+/**
+ * Connectors, in roadmap.sh's newer track layout.
+ *
+ * Those roadmaps carry no edges at all — ai-data-scientist has exactly one,
+ * and it points at itself. What joins one step to the next is a node: a thin
+ * `vertical` or `horizontal` box that their renderer draws as a line. Dropping
+ * them left a map of boxes floating with nothing between them.
+ *
+ * They come labelled "vertical node" / "horizontal node", which is a name for
+ * the shape rather than anything to read, so the label is cleared here and the
+ * client draws a line instead of a box.
+ */
+const CONNECTORS = new Set(["horizontal", "vertical"]);
+
+/**
+ * Containers worth keeping only when something survives inside them.
+ *
+ * Just `section`. In the track layout a `label` is a step number — a 24x36
+ * box reading "1" — and treating those as containers deleted every one of
+ * them for holding nothing.
+ */
+const CONTAINERS = new Set(["section"]);
 
 /** roadmap.sh's own promotion, wherever it is phrased. */
 const PROMO = /roadmap\.sh|detailed version of this roadmap|related roadmaps/i;
@@ -210,8 +240,9 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
         const type = String(node.type ?? "");
         if (!RENDERABLE.has(type)) continue;
         const data = (node.data ?? {}) as { label?: unknown; style?: { fontSize?: unknown; color?: unknown } };
-        const label = resolvePlaceholders(typeof data.label === "string" ? data.label : "");
-        if (!label || PROMO.test(label)) continue;
+        const connector = CONNECTORS.has(type);
+        const label = connector ? "" : resolvePlaceholders(typeof data.label === "string" ? data.label : "");
+        if (!connector && (!label || PROMO.test(label))) continue;
         const position = (node.position ?? {}) as { x?: unknown; y?: unknown };
         nodes.push({
             id: String(node.id ?? ""),
@@ -230,7 +261,9 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
     // as a large blank rectangle.
     const kept = nodes.filter(node => {
         if (!CONTAINERS.has(node.type)) return true;
-        return nodes.some(other => other !== node && !CONTAINERS.has(other.type) && contains(node, other));
+        return nodes.some(
+            other => other !== node && !CONTAINERS.has(other.type) && !CONNECTORS.has(other.type) && contains(node, other),
+        );
     });
     if (!kept.length) return null;
 
@@ -266,7 +299,7 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
             minY: Math.min(...ys),
             maxY: Math.max(...bottoms),
         },
-        topicCount: kept.filter(n => n.type === "topic" || n.type === "subtopic").length,
+        topicCount: kept.filter(n => n.type === "topic" || n.type === "subtopic" || n.type === "todo").length,
     };
 }
 

@@ -75,7 +75,12 @@ interface Lesson {
   source: 'roadmap.sh' | 'ulox-ai';
 }
 
-const CLICKABLE = new Set(['topic', 'subtopic']);
+// `todo` is the newer track layout's sub-step: a real item to read and tick,
+// not decoration. Leaving it out cost ai-data-scientist 19 of its 29 items.
+const CLICKABLE = new Set(['topic', 'subtopic', 'todo']);
+
+/** Step numbers, which are headings in name only. */
+const NUMBER_ONLY = /^\d+[.)]?$/;
 
 const RESOURCE_META: Record<ResourceKind, { icon: typeof FileText; label: string; tone: string }> = {
   video: { icon: Youtube, label: 'Watch', tone: '#FF5A5F' },
@@ -195,13 +200,26 @@ export function RoadmapView() {
 
   const grouped = useMemo(() => {
     if (!structure) return [] as Array<{ heading: string; nodes: SlimNode[] }>;
-    const headers = structure.nodes
+    let headers = structure.nodes
       .filter(n => n.type === 'section' || n.type === 'label' || n.type === 'title')
+      .filter(n => !NUMBER_ONLY.test(n.label.trim()))
       .sort((a, b) => a.y - b.y);
     // A beginner sees the main topics only; sub-topics are noise until the
     // shape of the path is familiar.
     const wanted = level === 'beginner' ? new Set(['topic']) : CLICKABLE;
-    const clickable = structure.nodes.filter(n => wanted.has(n.type)).sort((a, b) => a.y - b.y || a.x - b.x);
+    let clickable = structure.nodes.filter(n => wanted.has(n.type)).sort((a, b) => a.y - b.y || a.x - b.x);
+
+    // A track roadmap has no headings beyond its own title: the steps are the
+    // topics, each with its todo items under it. Grouping 29 items under one
+    // heading called "AI and Data Scientist" would throw that away.
+    const hasTodos = structure.nodes.some(n => n.type === 'todo');
+    if (hasTodos && wanted.has('todo') && headers.length <= 1) {
+      const steps = structure.nodes.filter(n => n.type === 'topic').sort((a, b) => a.y - b.y);
+      if (steps.length > 1) {
+        headers = steps;
+        clickable = clickable.filter(n => n.type !== 'topic');
+      }
+    }
 
     const buckets = new Map<string, SlimNode[]>();
     for (const node of clickable) {
@@ -359,6 +377,28 @@ export function RoadmapView() {
                 const isDone = topics[key(node.id)] === 'done';
                 const isSeen = topics[key(node.id)] === 'seen';
 
+                // A connector, not a box: in the track layout these thin
+                // nodes are the lines that join one step to the next.
+                if (node.type === 'horizontal' || node.type === 'vertical') {
+                  const upright = node.type === 'vertical';
+                  const thickness = Math.max(1.5, 2.5 * scale);
+                  return (
+                    <div
+                      key={node.id}
+                      aria-hidden
+                      className="absolute rounded-full"
+                      style={{
+                        background: '#4EA8FF',
+                        opacity: 0.55,
+                        left: upright ? left + w / 2 - thickness / 2 : left,
+                        top: upright ? top : top + h / 2 - thickness / 2,
+                        width: upright ? thickness : w,
+                        height: upright ? h : thickness,
+                      }}
+                    />
+                  );
+                }
+
                 if (node.type === 'title') {
                   return (
                     <div
@@ -405,6 +445,7 @@ export function RoadmapView() {
                 }
 
                 const isTopic = node.type === 'topic';
+                const isTodo = node.type === 'todo';
                 return (
                   <button
                     key={node.id}
@@ -417,7 +458,9 @@ export function RoadmapView() {
                           ? 'bg-eval-up/18 border-eval-up text-eval-up font-bold'
                           : isTopic
                             ? 'bg-brand/12 border-brand/60 text-chalk font-bold hover:bg-brand/20'
-                            : `bg-ink-800 border-ink-600 text-chalk-dim hover:border-brand/60 ${isSeen ? 'border-ink-500' : ''}`
+                            : isTodo
+                              ? `bg-ink-850 border-ink-600 text-chalk hover:border-accent/60 ${isSeen ? 'border-ink-500' : ''}`
+                              : `bg-ink-800 border-ink-600 text-chalk-dim hover:border-brand/60 ${isSeen ? 'border-ink-500' : ''}`
                       }`}
                     style={{ left, top, width: w, height: h, fontSize: Math.max(8, fontSize * 0.86) }}
                   >
@@ -429,7 +472,7 @@ export function RoadmapView() {
             </div>
           </div>
           <p className="text-center text-[11px] text-chalk-faint py-2">
-            Scroll to move down the path, + / − to zoom. Dotted lines show what leads to what.
+            Scroll to move down the path, + / − to zoom. The lines show what leads to what.
           </p>
         </Card>
       ) : (
