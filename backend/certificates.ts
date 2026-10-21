@@ -12,8 +12,8 @@
 // record. Closing that would mean scoring drills on the server — the puzzle
 // definitions and the execution simulator currently live in the frontend — and
 // recording topic reads as server-side events. Until then these certificates
-// are an honest record of work, not a tamper-proof credential, which is why
-// the UI never calls them an accredited qualification.
+// are an honest record of work on this platform rather than a tamper-proof
+// credential, which is why nothing here claims more than completion.
 
 import { db } from "@appdeploy/sdk";
 

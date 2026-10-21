@@ -27,7 +27,10 @@ const STRUCTURE_TTL = 12 * 60 * 60 * 1000;
  * needs silently missing — which is exactly how the connectors ended up drawn
  * from default sides instead of the ones upstream recorded.
  */
-const STRUCTURE_VERSION = 2;
+// 3: roadmap.sh's own promotion stripped, empty containers dropped, and
+// @currentYear@ resolved. Bumped so cached structures are rebuilt rather than
+// served stale until the TTL runs out.
+const STRUCTURE_VERSION = 3;
 
 export interface SlimNode {
     id: string;
@@ -159,7 +162,39 @@ export async function getCatalog(force = false): Promise<{ roadmaps: CatalogEntr
 
 // --- Structure --------------------------------------------------------------
 
-const RENDERABLE = new Set(["topic", "subtopic", "title", "section", "label", "paragraph", "button", "linksgroup"]);
+// What is worth drawing on a learning map.
+//
+// `button` and `linksgroup` are roadmap.sh's own navigation — "Find the
+// detailed version of this roadmap", a button back to their site, a panel of
+// related roadmaps. Upstream they sit beside the content; rendered here they
+// read as part of the path, and because they sit far out to one side they
+// stretched the bounding box so the actual topics were drawn small.
+const RENDERABLE = new Set(["topic", "subtopic", "title", "section", "label", "paragraph"]);
+
+/** Containers: useful only when something survives inside them. */
+const CONTAINERS = new Set(["section", "label"]);
+
+/** roadmap.sh's own promotion, wherever it is phrased. */
+const PROMO = /roadmap\.sh|detailed version of this roadmap|related roadmaps/i;
+
+/**
+ * roadmap.sh writes a literal @currentYear@ into titles and descriptions and
+ * substitutes it in their own renderer. Ours has to do the same, or a learner
+ * reads "ship AI agents in @currentYear@".
+ */
+function resolvePlaceholders(text: string): string {
+    return text.replace(/@currentYear@/g, String(new Date().getFullYear()));
+}
+
+/** Does `inner` sit inside `outer`? Used to find containers left empty. */
+function contains(outer: SlimNode, inner: SlimNode): boolean {
+    return (
+        inner.x >= outer.x - 4 &&
+        inner.y >= outer.y - 4 &&
+        inner.x + inner.w <= outer.x + outer.w + 4 &&
+        inner.y + inner.h <= outer.y + outer.h + 4
+    );
+}
 
 function slimStructure(slug: string, payload: unknown): RoadmapStructure | null {
     const raw = payload as {
@@ -175,8 +210,8 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
         const type = String(node.type ?? "");
         if (!RENDERABLE.has(type)) continue;
         const data = (node.data ?? {}) as { label?: unknown; style?: { fontSize?: unknown; color?: unknown } };
-        const label = typeof data.label === "string" ? data.label : "";
-        if (!label) continue;
+        const label = resolvePlaceholders(typeof data.label === "string" ? data.label : "");
+        if (!label || PROMO.test(label)) continue;
         const position = (node.position ?? {}) as { x?: unknown; y?: unknown };
         nodes.push({
             id: String(node.id ?? ""),
@@ -190,18 +225,26 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
             colour: typeof data.style?.color === "string" ? data.style.color : undefined,
         });
     }
-    if (!nodes.length) return null;
+    // A container whose contents were all promotion is now an empty box with a
+    // heading floating in it, which is how "Related Roadmaps" came to be drawn
+    // as a large blank rectangle.
+    const kept = nodes.filter(node => {
+        if (!CONTAINERS.has(node.type)) return true;
+        return nodes.some(other => other !== node && !CONTAINERS.has(other.type) && contains(node, other));
+    });
+    if (!kept.length) return null;
 
-    const xs = nodes.map(n => n.x);
-    const ys = nodes.map(n => n.y);
-    const rights = nodes.map(n => n.x + n.w);
-    const bottoms = nodes.map(n => n.y + n.h);
+    const live = new Set(kept.map(n => n.id));
+    const xs = kept.map(n => n.x);
+    const ys = kept.map(n => n.y);
+    const rights = kept.map(n => n.x + n.w);
+    const bottoms = kept.map(n => n.y + n.h);
 
     return {
         slug,
         title: typeof raw.title === "string" && raw.title ? raw.title : titleCase(slug),
-        description: typeof raw.description === "string" ? raw.description : "",
-        nodes,
+        description: resolvePlaceholders(typeof raw.description === "string" ? raw.description : ""),
+        nodes: kept,
         edges: Array.isArray(raw.edges)
             ? raw.edges
                   .map(edge => {
@@ -215,7 +258,7 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
                           dashed: data.edgeStyle === "dashed" || !!style.strokeDasharray,
                       };
                   })
-                  .filter(edge => edge.source && edge.target)
+                  .filter(edge => live.has(edge.source) && live.has(edge.target))
             : [],
         bounds: {
             minX: Math.min(...xs),
@@ -223,7 +266,7 @@ function slimStructure(slug: string, payload: unknown): RoadmapStructure | null 
             minY: Math.min(...ys),
             maxY: Math.max(...bottoms),
         },
-        topicCount: nodes.filter(n => n.type === "topic" || n.type === "subtopic").length,
+        topicCount: kept.filter(n => n.type === "topic" || n.type === "subtopic").length,
     };
 }
 

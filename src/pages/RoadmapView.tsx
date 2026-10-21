@@ -268,6 +268,31 @@ export function RoadmapView() {
             </p>
           </div>
           <div className="flex items-center gap-1 ml-auto">
+            {/* Zoom sits with the other view controls. Floating over the map,
+                it covered whichever box happened to be in the corner. */}
+            {view === 'map' && (
+              <>
+                <button
+                  className="btn btn-ghost !px-2 !py-1.5"
+                  onClick={() => setZoom(z => Math.max(0.5, z / 1.2))}
+                  aria-label="Zoom out"
+                >
+                  <Minus size={13} />
+                </button>
+                <button
+                  className="btn btn-ghost !px-2 !py-1.5"
+                  onClick={() => setZoom(z => Math.min(2.2, z * 1.2))}
+                  aria-label="Zoom in"
+                >
+                  <Plus size={13} />
+                </button>
+                {zoom !== 1 && (
+                  <button className="btn btn-quiet !px-2 !py-1.5 !text-[11px]" onClick={() => setZoom(1)}>
+                    Fit
+                  </button>
+                )}
+              </>
+            )}
             <button
               onClick={() => setView('list')}
               className={`btn ${view === 'list' ? 'btn-primary' : 'btn-ghost'} !px-2.5 !py-1.5 !text-[11px]`}
@@ -285,24 +310,7 @@ export function RoadmapView() {
       </header>
 
       {view === 'map' ? (
-        <Card className="p-2 relative">
-          <div className="absolute right-3 top-3 z-10 flex flex-col gap-1">
-            <button
-              className="w-8 h-8 grid place-items-center rounded-lg bg-ink-800/95 border border-ink-600 text-chalk-dim hover:text-chalk"
-              onClick={() => setZoom(z => Math.min(2.2, z * 1.2))}
-              aria-label="Zoom in"
-            >
-              <Plus size={14} />
-            </button>
-            <button
-              className="w-8 h-8 grid place-items-center rounded-lg bg-ink-800/95 border border-ink-600 text-chalk-dim hover:text-chalk"
-              onClick={() => setZoom(z => Math.max(0.5, z / 1.2))}
-              aria-label="Zoom out"
-            >
-              <Minus size={14} />
-            </button>
-          </div>
-
+        <Card className="p-2">
           <div ref={holderRef} className="overflow-x-auto no-scrollbar">
             <div className="relative mx-auto" style={{ width, height }}>
               {/* Connectors sit behind the boxes, drawn from the sides upstream recorded. */}
@@ -433,6 +441,9 @@ export function RoadmapView() {
                   <Layers size={13} /> {group.heading}
                 </h2>
                 <div className="h-px grow bg-ink-750" />
+                <span className="text-[11px] font-mono shrink-0 text-chalk-faint">
+                  {group.nodes.filter(n => topics[key(n.id)] === 'done').length}/{group.nodes.length}
+                </span>
               </div>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {group.nodes.map(node => {

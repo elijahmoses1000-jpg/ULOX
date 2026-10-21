@@ -292,8 +292,8 @@ export function Certificates() {
       />
 
       <p className="text-[11.5px] text-chalk-faint mt-6 leading-relaxed">
-        These are UloX certificates of completion. They record work you actually did on this platform — every
-        requirement is re-checked on our side before one is issued — but they are not an accredited qualification.
+        These are UloX certificates of completion. They record work you actually did on this platform, and every
+        requirement is re-checked on our side before one is issued.
       </p>
     </div>
   );
@@ -492,7 +492,7 @@ export function VerifyCertificate() {
       />
 
       <p className="text-center text-[11.5px] text-chalk-faint mt-3 print:hidden">
-        Verified against UloX records. A certificate of completion on this platform, not an accredited qualification.
+        Verified against UloX records — the code above resolves to this page, and this page reads the record.
       </p>
     </div>
   );

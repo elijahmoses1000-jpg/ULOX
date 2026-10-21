@@ -241,18 +241,24 @@ export async function renderCertificate(cert: CertificateData, hue: string): Pro
   ctx.font = `400 24px ${body}`;
   ctx.fillText(`Verify at ${verifyUrl(cert.code)}`, W / 2, 1248);
   ctx.font = `400 21px ${body}`;
-  ctx.fillText(
-    'A certificate of completion issued by UloX. Not an accredited qualification.',
-    W / 2,
-    1292,
-  );
+  ctx.fillText('A certificate of completion issued by UloX by VerionX.', W / 2, 1292);
 
   return canvas;
 }
 
+/**
+ * Where a certificate says it can be checked.
+ *
+ * Fixed to the brand domain rather than read off `window.location`. A
+ * certificate outlives the address it was issued from: one printed today from
+ * a preview host would carry that host into every CV it is ever attached to,
+ * and the only way to correct it would be to reissue. This is the address on
+ * the deck, the videos and the certificates alike.
+ */
+export const SITE_URL = 'https://ulox.verionx.org';
+
 export function verifyUrl(code: string): string {
-  if (typeof window === 'undefined') return `/#/verify/${code}`;
-  return `${window.location.origin}${window.location.pathname}#/verify/${code}`;
+  return `${SITE_URL}/#/verify/${code}`;
 }
 
 function canvasToJpeg(canvas: HTMLCanvasElement, quality = 0.94): Promise<Blob> {
