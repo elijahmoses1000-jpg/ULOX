@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Sparkles, Trash2, Wand2 } from 'lucide-react';
-import { AgentGraph, EDGE_CONDITIONS, EdgeCondition, ItolsKey, KIND_META, Move, NodeKind } from '../lib/agentic';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, Search, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { AgentGraph, EDGE_CONDITIONS, EdgeCondition, ItolsKey, KIND_META, Move, typeIdOf } from '../lib/agentic';
+import { GROUP_BLURB, NodeType, TYPES_BY_GROUP, itolsKeysFor, nodeType } from '../lib/node-catalog';
 import { ITOLS_HELP } from '../lib/analyzer';
 import { Selection } from '../lib/store';
 import { Chip, Empty } from './ui';
-
-const ITOLS_ORDER: ItolsKey[] = ['identity', 'tasks', 'outcome', 'language', 'security'];
 
 /** Quick-insert bar, borrowed from mobile code editors: the characters a phone
  *  keyboard buries two taps deep are the ones a contract needs most. */
@@ -116,6 +115,101 @@ function ItolsField({
   );
 }
 
+/**
+ * The parts bin.
+ *
+ * Thirty parts is past the point where a flat grid helps, so this groups them
+ * the way someone building thinks — where a run starts, what it reasons with,
+ * what it calls out to — and puts a search box on top for the person who
+ * already knows the name. Groups open one at a time; searching opens all of
+ * them, because a filtered list has nothing to hide.
+ */
+function Palette({ onAdd }: { onAdd: (type: NodeType) => void }) {
+  const [query, setQuery] = useState('');
+  const [openGroup, setOpenGroup] = useState<string | null>('Reasoning');
+
+  const needle = query.trim().toLowerCase();
+  const groups = useMemo(
+    () =>
+      TYPES_BY_GROUP.map(({ group, types }) => ({
+        group,
+        types: needle
+          ? types.filter(t => `${t.label} ${t.hint} ${t.use} ${t.group}`.toLowerCase().includes(needle))
+          : types,
+      })).filter(g => g.types.length),
+    [needle]
+  );
+  const total = groups.reduce((n, g) => n + g.types.length, 0);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="label">Add a node</span>
+        <span className="text-[10.5px] font-mono text-chalk-faint">{total} parts</span>
+      </div>
+
+      <div className="panel-flat flex items-center gap-2 px-2.5 py-1.5 mb-2">
+        <Search size={13} className="text-chalk-faint shrink-0" />
+        <input
+          className="bg-transparent outline-none text-[12.5px] text-chalk placeholder:text-chalk-faint grow min-w-0"
+          placeholder="Search parts — guard, memory, retry…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          aria-label="Search node types"
+        />
+        {query && (
+          <button className="shrink-0 text-chalk-faint hover:text-chalk" onClick={() => setQuery('')} aria-label="Clear search">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {!total && (
+        <p className="text-[11.5px] text-chalk-faint px-1 py-3 leading-relaxed">
+          Nothing matches “{query.trim()}”. Try the thing it does rather than its name — “retry”, “stop”, “remember”.
+        </p>
+      )}
+
+      <div className="space-y-1.5">
+        {groups.map(({ group, types }) => {
+          const open = !!needle || openGroup === group;
+          return (
+            <div key={group} className="panel-flat overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-ink-750/60 transition"
+                onClick={() => setOpenGroup(g => (g === group ? null : group))}
+              >
+                <span className="grow min-w-0">
+                  <span className="text-[12.5px] font-bold text-chalk">{group}</span>
+                  <span className="block text-[10.5px] text-chalk-faint leading-snug mt-0.5">{GROUP_BLURB[group]}</span>
+                </span>
+                <span className="text-[10.5px] font-mono text-chalk-faint shrink-0">{types.length}</span>
+                <ChevronDown size={14} className={`text-chalk-faint shrink-0 transition ${open ? 'rotate-180' : ''}`} />
+              </button>
+
+              {open && (
+                <div className="border-t border-ink-700 divide-y divide-ink-700">
+                  {types.map(type => (
+                    <button
+                      key={type.id}
+                      onClick={() => onAdd(type)}
+                      className="w-full px-3 py-2.5 text-left hover:bg-ink-750/60 transition group"
+                    >
+                      <span className="text-[12.5px] font-bold text-chalk group-hover:text-brand-bright">{type.label}</span>
+                      <span className="block text-[10.5px] text-chalk-faint leading-snug mt-0.5">{type.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Inspector({
   graph,
   selection,
@@ -130,7 +224,7 @@ export function Inspector({
   onMove: (move: Move) => void;
   onDeleteNode: (id: string) => void;
   onDeleteEdge: (id: string) => void;
-  onAddNode: (kind: NodeKind) => void;
+  onAddNode: (type: NodeType) => void;
   readOnly?: boolean;
 }) {
   const node = selection?.type === 'node' ? graph.nodes.find(n => n.id === selection.id) : undefined;
@@ -182,22 +276,32 @@ export function Inspector({
   }
 
   if (node) {
-    const isContractual = node.kind === 'agent' || node.kind === 'guard';
+    const part = nodeType(typeIdOf(node));
+    const contractKeys = itolsKeysFor(node.kind);
     return (
       <div>
         <div className="px-4 pt-4 pb-3 border-b border-ink-700">
-          <div className="flex items-center gap-2 mb-2">
-            <Chip tone="brand">{KIND_META[node.kind].label}</Chip>
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <Chip tone="brand">{part?.label ?? KIND_META[node.kind].label}</Chip>
+            {part && <Chip>{part.group}</Chip>}
             {node.locked && <Chip>locked by puzzle</Chip>}
           </div>
           <div className="text-[15px] font-bold text-chalk">{node.label}</div>
-          <p className="text-[11.5px] text-chalk-dim mt-1">{KIND_META[node.kind].hint}</p>
+          <p className="text-[11.5px] text-chalk-dim mt-1">{part?.use ?? KIND_META[node.kind].hint}</p>
         </div>
 
-        {isContractual ? (
+        {contractKeys.length ? (
           <div>
-            <div className="px-4 py-2 label bg-ink-850/60">ITOLS contract</div>
-            {ITOLS_ORDER.map(key => (
+            <div className="px-4 py-2 label bg-ink-850/60">
+              {node.kind === 'terminal' ? 'Outcome contract' : 'ITOLS contract'}
+            </div>
+            {node.kind === 'terminal' && (
+              <p className="px-4 pt-2.5 text-[11.5px] leading-relaxed text-chalk-dim">
+                An output is where the run stops, so it is the one node that has to say what “done” means. Without an
+                Outcome here, nothing upstream can tell whether it is allowed to finish.
+              </p>
+            )}
+            {contractKeys.map(key => (
               <ItolsField
                 key={key}
                 nodeId={node.id}
@@ -225,7 +329,7 @@ export function Inspector({
           </div>
         ) : (
           <div className="p-4">
-            <p className="text-[12px] leading-snug text-chalk-dim">{KIND_META[node.kind].hint}</p>
+            <p className="text-[12px] leading-snug text-chalk-dim">{part?.hint ?? KIND_META[node.kind].hint}</p>
           </div>
         )}
 
@@ -240,22 +344,9 @@ export function Inspector({
     );
   }
 
-  const palette: NodeKind[] = ['agent', 'tool', 'guard', 'memory', 'condition', 'terminal'];
   return (
     <div className="p-4">
-      <div className="label mb-2">Add a node</div>
-      <div className="grid grid-cols-2 gap-1.5">
-        {palette.map(kind => (
-          <button
-            key={kind}
-            onClick={() => onAddNode(kind)}
-            className="panel-flat px-3 py-2.5 text-left hover:border-brand/60 transition group"
-          >
-            <div className="text-[12.5px] font-bold text-chalk group-hover:text-brand-bright">{KIND_META[kind].label}</div>
-            <div className="text-[10.5px] text-chalk-faint leading-snug mt-0.5 line-clamp-2">{KIND_META[kind].hint}</div>
-          </button>
-        ))}
-      </div>
+      <Palette onAdd={onAddNode} />
 
       <div className="mt-5 panel-flat p-3">
         <div className="flex items-center gap-1.5 mb-1.5">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Cpu, Lightbulb } from 'lucide-react';
-import { KIND_META, Move, NodeKind, defaultCondition } from '../lib/agentic';
+import { Move, defaultCondition } from '../lib/agentic';
+import { NodeType } from '../lib/node-catalog';
 import { Position } from '../lib/engine';
 import { useEngine } from '../hooks/useEngine';
 import { useLab } from '../lib/store';
@@ -113,10 +114,16 @@ export function Workbench({ header, brief, briefLabel, onPositionChange, onHint,
     if (!ok && puzzle) toast(`Move limit reached — you have ${puzzle.maxMoves} moves for this tactic.`, 'err');
   };
 
-  const addNode = (kind: NodeKind) => {
+  const addNode = (type: NodeType) => {
     const xs = graph.nodes.map(n => n.x);
-    play({ type: 'ADD_NODE', kind, x: (xs.length ? Math.max(...xs) : 100) + 220, y: 150 + Math.random() * 120 });
-    toast(`${KIND_META[kind].label} added — tap its ⊕ handle to wire it in.`, 'info');
+    play({
+      type: 'ADD_NODE',
+      kind: type.kind,
+      nodeType: type.id,
+      x: (xs.length ? Math.max(...xs) : 100) + 220,
+      y: 150 + Math.random() * 120,
+    });
+    toast(`${type.label} added — tap its ⊕ handle to wire it in.`, 'info');
   };
 
   const askHint = async () => {

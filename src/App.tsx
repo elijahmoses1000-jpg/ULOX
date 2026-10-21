@@ -17,6 +17,8 @@ import { Rush } from './pages/Rush';
 import { Arena } from './pages/Arena';
 import { Room } from './pages/Room';
 import { Live } from './pages/Live';
+import { Play } from './pages/Play';
+import { Duel } from './pages/Duel';
 import { Toolkit } from './pages/Toolkit';
 import { Glossary } from './pages/Glossary';
 import { Certificates, VerifyCertificate } from './pages/Certificates';
@@ -54,6 +56,8 @@ export default function App() {
             <Route path="/join" element={<Arena />} />
             <Route path="/arena/:roomId" element={<Room />} />
             <Route path="/live" element={<Live />} />
+            <Route path="/play" element={<Play />} />
+            <Route path="/duel" element={<Duel />} />
             <Route path="/toolkit" element={<Toolkit />} />
             <Route path="/glossary" element={<Glossary />} />
             <Route path="/certificates" element={<Certificates />} />

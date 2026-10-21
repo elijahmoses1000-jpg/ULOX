@@ -12,7 +12,7 @@ import { BUILD_TASK_BY_STAGE, evaluateTask } from '../lib/build-tasks';
 import { BuildGuide } from '../components/BuildGuide';
 import { PublishDialog } from '../components/PublishDialog';
 import { BuildHelp, useFirstRunHelp } from '../components/BuildHelp';
-import { Blueprint } from '../components/Blueprint';
+import { Blueprint, BlueprintView } from '../components/Blueprint';
 import { PATTERN_BY_ID as PATTERNS_BY_ID } from '../lib/patterns';
 import { Workbench } from '../components/Workbench';
 import { Chip, Modal, useToast } from '../components/ui';
@@ -216,13 +216,44 @@ export function Lab() {
     </div>
   );
 
-  // On a journey build the checklist leads and the pattern notes follow it;
-  // a free build has only the notes — and on a blank canvas there are no notes
-  // either, so the column is dropped rather than left standing empty. An empty
-  // 280px panel is pure width taken away from the graph.
+  // The plan, inline. It used to live only behind a header button, which is
+  // how someone can use Build for a week and never find out the map exists.
+  const planPanel = blueprint ? (
+    <div className="p-4">
+      <BlueprintView
+        target={blueprint.graph}
+        mine={graph}
+        title={task ? task.making : blueprint.name}
+        subtitle={task ? task.youHave : blueprint.summary}
+      />
+    </div>
+  ) : undefined;
+
+  // On a journey build the checklist leads, with the map and the pattern notes
+  // folded under it; a free build opens on the map itself. On a blank canvas
+  // there is neither, so the column is dropped rather than left standing empty
+  // — an empty 280px panel is pure width taken away from the graph.
   const brief = guide ? (
     <>
       {guide}
+      {planPanel && (
+        <details className="border-t border-ink-700">
+          <summary className="px-4 py-2.5 text-[11.5px] font-semibold text-chalk-dim cursor-pointer select-none hover:text-chalk">
+            The shape you are building towards
+          </summary>
+          {planPanel}
+        </details>
+      )}
+      <details className="border-t border-ink-700">
+        <summary className="px-4 py-2.5 text-[11.5px] font-semibold text-chalk-dim cursor-pointer select-none hover:text-chalk">
+          How this pattern works, and what usually goes wrong
+        </summary>
+        {reference}
+      </details>
+    </>
+  ) : planPanel ? (
+    <>
+      {planPanel}
       <details className="border-t border-ink-700">
         <summary className="px-4 py-2.5 text-[11.5px] font-semibold text-chalk-dim cursor-pointer select-none hover:text-chalk">
           How this pattern works, and what usually goes wrong
@@ -372,7 +403,7 @@ export function Lab() {
       <Workbench
         header={headerWithTool}
         brief={brief}
-        briefLabel={guide ? 'Build' : undefined}
+        briefLabel={guide ? 'Build' : planPanel ? 'Plan' : undefined}
         onPositionChange={p => setScore(p.report.score)}
       />
       <BuildHelp open={helpOpen} onClose={() => setHelpOpen(false)} />

@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, Circle } from 'lucide-react';
-import { AgentGraph, CONDITION_LABEL, GraphEdge, KIND_META, NodeKind } from '../lib/agentic';
+import { AgentGraph, CONDITION_LABEL, GraphEdge, GraphNode, KIND_META, NodeKind, typeIdOf } from '../lib/agentic';
+import { nodeType } from '../lib/node-catalog';
 import { Modal } from './ui';
 
 /**
@@ -13,6 +15,10 @@ import { Modal } from './ui';
  * It doubles as a progress map. Anything already on your canvas is drawn
  * solid and ticked, anything still missing is dotted, so the same picture
  * answers "what am I building" at the start and "what is left" in the middle.
+ *
+ * The layout follows the space it is given rather than the size of the window:
+ * the same diagram is a row on a desktop and a column in a phone-width pane,
+ * because a diagram you have to drag sideways is one nobody reads.
  */
 
 const KIND_HUE: Record<NodeKind, string> = {
@@ -25,19 +31,39 @@ const KIND_HUE: Record<NodeKind, string> = {
   terminal: '#EE1B24',
 };
 
-const VB_W = 760;
 const NODE_W = 128;
 const NODE_H = 46;
 const PAD_X = NODE_W / 2 + 14;
-/** Tall enough for a bowed arrow and its label to clear the top node row. */
+/** Tall enough for a bowed arrow and its label to clear the node row. */
 const PAD_Y = NODE_H / 2 + 48;
 const MAX_H = 430;
 /** How far an arrow bows off the straight line between two boxes. */
 const BOW = 34;
+/** Below this many pixels of usable width, the row becomes a column. */
+const COLUMN_BELOW = 440;
+
+const WIDE_VB = 760;
+const NARROW_VB = 340;
+const ROW_GAP = 96;
 
 interface Point {
   x: number;
   y: number;
+}
+
+/** Track the width actually available, not the width of the window. */
+function useContentWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(entries => setWidth(entries[0].contentRect.width));
+    observer.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, width] as const;
 }
 
 /**
@@ -47,7 +73,7 @@ interface Point {
  * stretched to fill a fixed height, and the box is then sized to the content
  * rather than reserving space nothing draws into.
  */
-function project(nodes: AgentGraph['nodes']) {
+function projectWide(nodes: AgentGraph['nodes']) {
   const xs = nodes.map(n => n.x);
   const ys = nodes.map(n => n.y);
   const minX = Math.min(...xs);
@@ -55,14 +81,26 @@ function project(nodes: AgentGraph['nodes']) {
   const spanX = Math.max(1, Math.max(...xs) - minX);
   const spanY = Math.max(0, Math.max(...ys) - minY);
 
-  let scale = (VB_W - PAD_X * 2) / spanX;
+  let scale = (WIDE_VB - PAD_X * 2) / spanX;
   if (spanY * scale + PAD_Y * 2 > MAX_H) scale = (MAX_H - PAD_Y * 2) / Math.max(1, spanY);
 
   const at = new Map<string, Point>();
   for (const n of nodes) {
     at.set(n.id, { x: PAD_X + (n.x - minX) * scale, y: PAD_Y + (n.y - minY) * scale });
   }
-  return { at, height: Math.round(spanY * scale + PAD_Y * 2) };
+  return { at, width: WIDE_VB, height: Math.round(spanY * scale + PAD_Y * 2) };
+}
+
+/**
+ * One box per row, in the order you would add them.
+ *
+ * The column sits left of centre so arrows have room to bow out to the right,
+ * where their labels then sit in open space instead of over the boxes.
+ */
+function projectColumn(order: GraphNode[]) {
+  const at = new Map<string, Point>();
+  order.forEach((node, i) => at.set(node.id, { x: 120, y: PAD_Y + i * ROW_GAP }));
+  return { at, width: NARROW_VB, height: Math.round(PAD_Y * 2 + Math.max(0, order.length - 1) * ROW_GAP) };
 }
 
 /** Where a line from `from` towards `to` leaves the node box around `to`. */
@@ -116,7 +154,7 @@ function hasEdge(mine: AgentGraph, target: AgentGraph, source: string, dest: str
  * Reading order on the canvas is not build order — a return edge points
  * backwards — so this walks the graph instead of sorting by position.
  */
-function buildOrder(graph: AgentGraph) {
+function buildOrder(graph: AgentGraph): GraphNode[] {
   const targets = new Set(graph.edges.map(e => e.target));
   const roots = graph.nodes.filter(n => !targets.has(n.id));
   const queue = (roots.length ? roots : graph.nodes.slice(0, 1)).map(n => n.id);
@@ -136,16 +174,17 @@ function buildOrder(graph: AgentGraph) {
   return order.map(id => graph.nodes.find(n => n.id === id)!).filter(Boolean);
 }
 
-export function Blueprint({
-  open,
-  onClose,
+/** The part a target node is really asking for, named from the catalog. */
+function partOf(node: GraphNode) {
+  return nodeType(typeIdOf(node));
+}
+
+export function BlueprintView({
   target,
   mine,
   title,
   subtitle,
 }: {
-  open: boolean;
-  onClose: () => void;
   /** The architecture being built towards. */
   target: AgentGraph;
   /** What is on the canvas right now, used to mark progress. */
@@ -153,8 +192,10 @@ export function Blueprint({
   title: string;
   subtitle?: string;
 }) {
-  const { at, height } = project(target.nodes);
+  const [boxRef, boxWidth] = useContentWidth();
   const order = buildOrder(target);
+  const column = boxWidth > 0 && boxWidth < COLUMN_BELOW;
+  const { at, width: vbW, height } = column ? projectColumn(order) : projectWide(target.nodes);
 
   // Arrows between the same pair of boxes share a bow, so each gets its own
   // lane rather than three identical curves stacked on one another.
@@ -167,23 +208,13 @@ export function Blueprint({
   };
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="The shape you are building"
-      wide
-      footer={
-        <button className="btn-primary !text-xs" onClick={onClose}>
-          Start building
-        </button>
-      }
-    >
+    <div>
       <h3 className="font-display text-[15px] font-bold">{title}</h3>
       {subtitle && <p className="text-[12.5px] text-chalk-dim mt-1 leading-relaxed">{subtitle}</p>}
 
-      <div className="panel-flat mt-3 p-2 hidden md:block">
+      <div className="panel-flat mt-3 p-2" ref={boxRef}>
         <svg
-          viewBox={`0 0 ${VB_W} ${height}`}
+          viewBox={`0 0 ${vbW} ${height}`}
           className="w-full h-auto"
           role="img"
           aria-label="Diagram of the target architecture"
@@ -236,9 +267,11 @@ export function Blueprint({
           })}
 
           {target.nodes.map(node => {
-            const p = at.get(node.id)!;
+            const p = at.get(node.id);
+            if (!p) return null;
             const hue = KIND_HUE[node.kind] ?? '#4EA8FF';
             const built = mine ? mine.nodes.some(n => n.kind === node.kind) : false;
+            const part = partOf(node);
             return (
               <g key={node.id}>
                 <rect
@@ -255,7 +288,7 @@ export function Blueprint({
                 />
                 <circle cx={p.x - NODE_W / 2 + 15} cy={p.y} r={4.5} fill={hue} opacity={built ? 1 : 0.5} />
                 <text x={p.x - NODE_W / 2 + 26} y={p.y - 2} fontSize="9" fill={hue} fontWeight={700} letterSpacing="0.6">
-                  {KIND_META[node.kind].label.toUpperCase()}
+                  {(part?.label ?? KIND_META[node.kind].label).toUpperCase()}
                 </text>
                 <text x={p.x - NODE_W / 2 + 26} y={p.y + 11} fontSize="10.5" fill={built ? '#E9EBEE' : '#8C9299'}>
                   {node.label.length > 15 ? `${node.label.slice(0, 14)}…` : node.label}
@@ -267,7 +300,7 @@ export function Blueprint({
       </div>
 
       {mine && (
-        <p className="text-[11.5px] text-chalk-faint mt-2.5 leading-relaxed hidden md:block">
+        <p className="text-[11.5px] text-chalk-faint mt-2.5 leading-relaxed">
           Solid outlines are already on your canvas. Dotted ones are still to add.
         </p>
       )}
@@ -276,6 +309,7 @@ export function Blueprint({
       <ol className="space-y-1.5">
         {order.map((node, i) => {
           const built = mine ? mine.nodes.some(n => n.kind === node.kind) : false;
+          const part = partOf(node);
           return (
             <li key={node.id} className="flex items-start gap-2.5 panel-flat px-3 py-2">
               <span className="mt-0.5 shrink-0">
@@ -288,10 +322,10 @@ export function Blueprint({
               <span className="text-[11.5px] leading-relaxed min-w-0">
                 <span className="font-mono text-[11px] text-chalk-faint mr-1.5">{i + 1}.</span>
                 <span className="font-bold" style={{ color: KIND_HUE[node.kind] }}>
-                  {KIND_META[node.kind].label}
+                  {part?.label ?? KIND_META[node.kind].label}
                 </span>
                 <span className="text-chalk"> — {node.label}</span>
-                <span className="text-chalk-dim"> · {KIND_META[node.kind].hint}</span>
+                <span className="text-chalk-dim"> · {part?.hint ?? KIND_META[node.kind].hint}</span>
               </span>
             </li>
           );
@@ -332,6 +366,38 @@ export function Blueprint({
         The condition is what makes an arrow fire, and getting those right is most of the work: an arrow marked
         “always” where it should read “tool succeeded” is how a failure gets treated as a fact.
       </p>
+    </div>
+  );
+}
+
+export function Blueprint({
+  open,
+  onClose,
+  target,
+  mine,
+  title,
+  subtitle,
+}: {
+  open: boolean;
+  onClose: () => void;
+  target: AgentGraph;
+  mine?: AgentGraph;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="The shape you are building"
+      wide
+      footer={
+        <button className="btn-primary !text-xs" onClick={onClose}>
+          Start building
+        </button>
+      }
+    >
+      <BlueprintView target={target} mine={mine} title={title} subtitle={subtitle} />
     </Modal>
   );
 }

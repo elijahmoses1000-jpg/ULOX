@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, invitesClient } from '@appdeploy/client';
 import { Copy, Loader2, LogIn, Plus, Swords, Users } from 'lucide-react';
 import { useProfile } from '../lib/profile';
@@ -11,6 +11,10 @@ export function Arena() {
   const toast = useToast();
 
   const [code, setCode] = useState('');
+  // Play sends people here with the mode already chosen, so the card they
+  // tapped and the card they land on agree.
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState<'duel' | 'team'>(params.get('mode') === 'team' ? 'team' : 'duel');
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
   const [created, setCreated] = useState<{ roomId: string; code: string; inviteUrl: string } | null>(null);
   const [joinError, setJoinError] = useState('');
@@ -58,7 +62,7 @@ export function Arena() {
     setBusy('create');
     setJoinError('');
     try {
-      const res = await api.post('/api/rooms', identity);
+      const res = await api.post('/api/rooms', { ...identity, mode });
       const room = res.data.room;
       const inviteUrl = res.data.inviteCode
         ? invitesClient.buildJoinUrl(res.data.inviteCode, { path: '#/join' })
@@ -119,7 +123,7 @@ export function Arena() {
             <Users size={16} className="text-brand" />
             <span className="label">Match created</span>
             <Chip tone="warn" className="ml-auto">
-              waiting for opponent
+              {mode === 'team' ? 'waiting for 3 more' : 'waiting for opponent'}
             </Chip>
           </div>
 
@@ -163,10 +167,39 @@ export function Arena() {
               <Plus size={20} />
             </span>
             <h2 className="text-[15px] font-bold">Create a match</h2>
-            <p className="text-[12.5px] text-chalk-dim mt-1 leading-snug grow">
-              You get a six-character code and a share link. Your opponent needs neither an account nor an install.
+            <p className="text-[12.5px] text-chalk-dim mt-1 leading-snug">
+              You get a six-character code and a share link. Whoever joins needs neither an account nor an install.
             </p>
-            <button className="btn-primary w-full mt-4" onClick={create} disabled={busy !== null}>
+
+            <div className="grid grid-cols-2 gap-1.5 mt-3 grow content-start">
+              {([
+                { id: 'duel' as const, label: 'One on one', detail: 'Two players, rated.' },
+                { id: 'team' as const, label: 'Two on two', detail: 'Four players, unrated.' },
+              ]).map(option => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setMode(option.id)}
+                  className={`px-3 py-2.5 rounded-lg border text-left transition ${
+                    mode === option.id
+                      ? 'bg-brand text-white border-brand'
+                      : 'bg-ink-850 border-ink-700 hover:border-ink-500'
+                  }`}
+                >
+                  <span className="block text-[12.5px] font-bold">{option.label}</span>
+                  <span className={`block text-[10.5px] leading-snug mt-0.5 ${mode === option.id ? 'text-white/80' : 'text-chalk-faint'}`}>
+                    {option.detail}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-chalk-faint mt-2 leading-relaxed">
+              {mode === 'team'
+                ? 'Everyone gets the same five positions. A side scores its members’ solves added together, and the match starts once all four seats are filled.'
+                : 'Both players get the same five positions and race to pick the engine’s best move. Your rating moves on the result.'}
+            </p>
+
+            <button className="btn-primary w-full mt-3" onClick={create} disabled={busy !== null}>
               {busy === 'create' ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
               Create match
             </button>

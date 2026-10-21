@@ -1,6 +1,11 @@
 // Core agentic graph model for UloX by VerionX.
 // A graph is the "position"; a move is an atomic architectural edit.
 
+// The catalog names the parts; this file knows only the seven primitives they
+// compile to. The import runs one way — node-catalog takes types from here and
+// nothing else — so the two files cannot deadlock on load order.
+import { DEFAULT_TYPE_FOR_KIND, NODE_TYPE_BY_ID } from './node-catalog';
+
 export type NodeKind = 'entry' | 'agent' | 'tool' | 'condition' | 'guard' | 'memory' | 'terminal';
 
 export type ItolsKey = 'identity' | 'tasks' | 'outcome' | 'language' | 'security';
@@ -25,6 +30,8 @@ export interface ToolContract {
 export interface GraphNode {
   id: string;
   kind: NodeKind;
+  /** Catalog entry this node was added from. Older graphs have none. */
+  type?: string;
   label: string;
   x: number;
   y: number;
@@ -107,7 +114,7 @@ export interface AgentGraph {
 // ---------------------------------------------------------------------------
 
 export type Move =
-  | { type: 'ADD_NODE'; kind: NodeKind; label?: string; x?: number; y?: number }
+  | { type: 'ADD_NODE'; kind: NodeKind; nodeType?: string; label?: string; x?: number; y?: number }
   | { type: 'REMOVE_NODE'; nodeId: string }
   | { type: 'CONNECT_EDGE'; source: string; target: string; condition: EdgeCondition }
   | { type: 'REMOVE_EDGE'; edgeId: string }
@@ -147,22 +154,36 @@ export function nextId(prefix: string): string {
 }
 
 export function makeNode(kind: NodeKind, partial: Partial<GraphNode> = {}): GraphNode {
+  // A catalog part brings its own label, starter contract and declared inputs.
+  // An explicit value in `partial` always wins: a pattern that names a label
+  // means that label.
+  const preset = partial.type ? NODE_TYPE_BY_ID.get(partial.type) : undefined;
   const base: GraphNode = {
     id: partial.id ?? nextId('n'),
     kind,
-    label: partial.label ?? DEFAULT_LABEL[kind],
+    label: partial.label ?? preset?.label ?? DEFAULT_LABEL[kind],
     x: partial.x ?? 120,
     y: partial.y ?? 120,
   };
+  if (partial.type) base.type = partial.type;
   if (kind === 'agent' || kind === 'guard') {
-    base.itols = { identity: '', tasks: '', outcome: '', language: '', security: '', ...partial.itols };
+    base.itols = { identity: '', tasks: '', outcome: '', language: '', security: '', ...preset?.itols, ...partial.itols };
+  }
+  if (kind === 'terminal' && (preset?.itols || partial.itols)) {
+    base.itols = { ...preset?.itols, ...partial.itols };
   }
   if (kind === 'tool') {
-    base.contract = partial.contract ?? { input: 'query:string', output: 'documents:string[]', cost: 90 };
+    base.contract = partial.contract ?? preset?.contract ?? { input: 'query:string', output: 'documents:string[]', cost: 90 };
   }
-  if (partial.expects) base.expects = partial.expects;
+  const expects = partial.expects ?? preset?.expects;
+  if (expects) base.expects = expects;
   if (partial.locked) base.locked = true;
   return base;
+}
+
+/** The catalog part a node came from, falling back to its primitive's default. */
+export function typeIdOf(node: GraphNode): string {
+  return node.type ?? DEFAULT_TYPE_FOR_KIND[node.kind];
 }
 
 export function cloneGraph(g: AgentGraph): AgentGraph {
@@ -170,7 +191,12 @@ export function cloneGraph(g: AgentGraph): AgentGraph {
     budget: g.budget,
     requiredFacts: g.requiredFacts,
     maxRetries: g.maxRetries,
-    nodes: g.nodes.map(n => ({ ...n, itols: n.itols ? { ...n.itols } : undefined, contract: n.contract ? { ...n.contract } : undefined })),
+    nodes: g.nodes.map(n => ({
+      ...n,
+      itols: n.itols ? { ...n.itols } : undefined,
+      contract: n.contract ? { ...n.contract } : undefined,
+      expects: n.expects ? [...n.expects] : undefined,
+    })),
     edges: g.edges.map(e => ({ ...e })),
   };
 }
@@ -183,7 +209,7 @@ export function cloneGraph(g: AgentGraph): AgentGraph {
 export function mutateGraph(g: AgentGraph, move: Move): boolean {
   switch (move.type) {
     case 'ADD_NODE': {
-      g.nodes.push(makeNode(move.kind, { label: move.label, x: move.x, y: move.y }));
+      g.nodes.push(makeNode(move.kind, { type: move.nodeType, label: move.label, x: move.x, y: move.y }));
       return true;
     }
     case 'REMOVE_NODE': {
@@ -240,7 +266,7 @@ export function describeMove(graph: AgentGraph, move: Move): string {
   const name = (id: string) => graph.nodes.find(n => n.id === id)?.label ?? id;
   switch (move.type) {
     case 'ADD_NODE':
-      return `+ ${KIND_META[move.kind].label} ${move.label ?? ''}`.trim();
+      return `+ ${NODE_TYPE_BY_ID.get(move.nodeType ?? '')?.label ?? KIND_META[move.kind].label} ${move.label ?? ''}`.trim();
     case 'REMOVE_NODE':
       return `- ${name(move.nodeId)}`;
     case 'CONNECT_EDGE':

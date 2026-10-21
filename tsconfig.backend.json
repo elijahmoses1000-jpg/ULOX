@@ -1,0 +1,20 @@
+{
+  // The backend was never typechecked: tsconfig.json includes only "src", so a
+  // handler could drop a required field and nothing local would say a word.
+  // That is exactly how team matches silently reverted to duels.
+  //
+  // The platform SDK is untyped, so noImplicitAny is off here — this pass is
+  // after structural mistakes in our own records, not SDK call signatures.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["backend", "scripts/backend-shims.d.ts"]
+}

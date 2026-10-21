@@ -274,7 +274,7 @@ export function nextStep(profile: Profile, built: Record<string, boolean>): Next
     action: 'Play someone',
     label: 'You have finished the journey',
     because: 'All six disciplines complete',
-    to: '/live',
+    to: '/play',
   };
 }
 

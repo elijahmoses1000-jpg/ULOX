@@ -85,10 +85,39 @@ Description: Verifies the Build screen explains the target architecture before w
 
 Steps:
 1. Click "Skip" on the welcome screen, then open "Build" from the navigation
-2. Click "See the shape" and read the diagram, then click "Start building"
-3. Click "Share build", type "Research loop that stops when it has enough" as the title and click "Publish"
-4. Open "Published" from the navigation and select the "Mine" tab
-5. Click "Remove" on the build titled "Research loop that stops when it has enough", then click "Yes, remove"
-6. Refresh the page and select the "Mine" tab again
+2. Read the "Plan" panel, which is open by default and lists the parts to add in order
+3. Click "See the shape" and read the diagram, then click "Start building"
+4. Click "Share build", type "Research loop that stops when it has enough" as the title and click "Publish"
+5. Open "Published" from the navigation and select the "Mine" tab
+6. Click "Remove" on the build titled "Research loop that stops when it has enough", then click "Yes, remove"
+7. Refresh the page and select the "Mine" tab again
 
-Expected: The diagram dialog shows node and arrow labels before the build starts; after publishing, the build appears under "Mine"; after removal and the refresh it is gone from the list.
+Expected: The Plan panel and the diagram both name the parts and the arrow conditions before the build starts; after publishing, the build appears under "Mine"; after removal and the refresh it is gone from the list.
+
+## Test 7 - Add an output and give it the contract that stops the loop
+Viewport: desktop
+Covers: node catalog search, 30-part palette, adding a typed node, outcome contract editor on an output node
+Description: Verifies the parts bin offers far more than the seven primitives and that an output node asks for the Outcome contract that tells a loop when to stop.
+
+Steps:
+1. Click "Skip" on the welcome screen, then open "Build" from the navigation
+2. Open the "Edit" tab and read the part count shown beside "Add a node"
+3. Type "escalation" into the part search field
+4. Click the "Escalation" result to add it to the canvas
+5. Click the new Escalation node on the canvas
+6. Open the "Outcome" field and type "Hand to a human with the request, what was tried, and why it stopped. The run ends here."
+
+Expected: The palette reports 30 parts across named groups; after the search only Escalation-related parts remain; the selected Escalation node shows an "Outcome contract" section, and the Outcome field is marked filled once the text is entered.
+
+## Test 8 - Play a game against UX and get a reason for every move
+Viewport: mobile
+Covers: Play hub, the UX opponent, engine-scored move grading, per-move explanations, match settlement
+Description: Verifies the bot opponent plays real engine moves on its own board and explains each one, and that the match settles on the two scores.
+
+Steps:
+1. Click "Skip" on the welcome screen, then open "Play" from the navigation
+2. Click "Play UX"
+3. Choose the "Learner" level
+4. Pick one of the offered moves, six times in a row
+
+Expected: Both scores start equal and change as moves are played; the move log shows a grade and a sentence for each of your moves and a move with a reason for each of UX's; after the sixth move the page declares a winner or a draw based on the two scores.

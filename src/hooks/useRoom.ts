@@ -6,6 +6,8 @@ export interface RoomPlayer {
   name: string;
   colour: string;
   rating: number;
+  /** 0 or 1. In a duel it is just which seat; in a team match it is the side. */
+  team: number;
   index: number;
   correct: number;
   finishedAt: number | null;
@@ -24,11 +26,14 @@ export interface RoomState {
   id: string;
   code: string;
   seed: string;
+  mode: 'duel' | 'team';
   puzzleIds: string[];
   players: RoomPlayer[];
   chat: ChatMessage[];
   status: 'waiting' | 'playing' | 'finished';
   winnerId: string | null;
+  /** Set instead of winnerId when the match was played in teams. */
+  winnerTeam: number | null;
   createdAt: number;
 }
 

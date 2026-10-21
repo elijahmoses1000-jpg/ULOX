@@ -46,6 +46,7 @@ export function Room() {
   const { roomId } = useParams();
   const profile = useProfile(s => s.profile);
   const recordArena = useProfile(s => s.recordArena);
+  const recordDuel = useProfile(s => s.recordDuel);
   const toast = useToast();
   const { room, error, connected } = useRoom(roomId);
 
@@ -55,6 +56,16 @@ export function Room() {
 
   const me = room?.players.find(p => p.playerId === profile.playerId) ?? null;
   const opponent = room?.players.find(p => p.playerId !== profile.playerId) ?? null;
+
+  // Team play changes who you are measured against, not how you play: the
+  // board, the options and the answer are identical. Only the scoreboard and
+  // the settlement differ.
+  const teams = room?.mode === 'team';
+  const mySide = me?.team ?? 0;
+  const sideOf = (team: number) => room?.players.filter(p => p.team === team) ?? [];
+  const tally = (team: number) => sideOf(team).reduce((n, p) => n + p.correct, 0);
+  const seats = teams ? 4 : 2;
+  const waitingFor = Math.max(0, seats - (room?.players.length ?? 0));
 
   const currentPuzzle = useMemo(() => {
     if (!room || !me) return null;
@@ -72,10 +83,22 @@ export function Room() {
   useEffect(() => {
     if (!room || room.status !== 'finished' || settledRef.current || !me || !opponent) return;
     settledRef.current = true;
+    if (teams) {
+      // A team result is not rated. Glicko measures one player against one
+      // opponent, and splitting a side's result across its members would
+      // either reward carrying or punish being carried.
+      const outcome = room.winnerTeam === null ? 'draw' : room.winnerTeam === mySide ? 'win' : 'loss';
+      recordDuel(outcome);
+      toast(
+        outcome === 'win' ? 'Your side won — XP awarded, rating untouched.' : outcome === 'draw' ? 'Team match drawn.' : 'Your side lost.',
+        outcome === 'win' ? 'ok' : 'info'
+      );
+      return;
+    }
     const result = room.winnerId === null ? 'draw' : room.winnerId === profile.playerId ? 'win' : 'loss';
     recordArena(result, opponent.rating || 1200);
     toast(result === 'win' ? 'Match won — rating updated.' : result === 'draw' ? 'Match drawn.' : 'Match lost — rating updated.', result === 'win' ? 'ok' : 'info');
-  }, [room, me, opponent, profile.playerId, recordArena, toast]);
+  }, [room, me, opponent, profile.playerId, recordArena, recordDuel, teams, mySide, toast]);
 
   const submit = useCallback(
     async (index: number) => {
@@ -142,6 +165,46 @@ export function Room() {
         </span>
       </div>
 
+      {teams ? (
+        <Card className="p-4 mb-3">
+          <div className="grid grid-cols-2 gap-3">
+            {[mySide, mySide === 0 ? 1 : 0].map((team, column) => (
+              <div key={team}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-chalk-faint">
+                    {column === 0 ? 'Your side' : 'Other side'}
+                  </span>
+                  {room.winnerTeam === team && <Crown size={14} className="text-eval-warn" />}
+                  <span className="ml-auto font-display text-lg font-bold tabular-nums text-chalk">{tally(team)}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {sideOf(team).map(player => (
+                    <div key={player.playerId} className="flex items-center gap-2">
+                      <Avatar name={player.name} colour={player.colour} size={22} />
+                      <span className="text-[12px] font-semibold truncate grow min-w-0">
+                        {player.playerId === profile.playerId ? 'You' : player.name}
+                      </span>
+                      <span className="text-[11px] text-chalk-faint shrink-0 tabular-nums">
+                        {player.correct}/{Math.min(player.index, total)}
+                      </span>
+                    </div>
+                  ))}
+                  {!sideOf(team).length && <p className="text-[11.5px] text-chalk-faint">Nobody here yet.</p>}
+                </div>
+                <div className="mt-2">
+                  <Progress
+                    value={sideOf(team).length ? sideOf(team).reduce((n, p) => n + p.index, 0) / (sideOf(team).length * total) : 0}
+                    tone={column === 0 ? 'brand' : 'info'}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-chalk-faint mt-3 leading-relaxed">
+            A side scores the solves of everyone on it. Team matches are unrated — they move XP, not your rating.
+          </p>
+        </Card>
+      ) : (
       <Card className="p-4 mb-3">
         <div className="grid grid-cols-2 gap-3">
           {[me, opponent].map((player, i) =>
@@ -176,14 +239,19 @@ export function Room() {
           )}
         </div>
       </Card>
+      )}
 
       {room.status === 'waiting' && (
         <Card className="p-6 text-center">
           <Loader2 size={20} className="animate-spin mx-auto mb-3 text-brand" />
-          <p className="text-[14px] font-bold">Waiting for an opponent</p>
+          <p className="text-[14px] font-bold">
+            {teams
+              ? `Waiting for ${waitingFor} more ${waitingFor === 1 ? 'player' : 'players'}`
+              : 'Waiting for an opponent'}
+          </p>
           <p className="text-[12.5px] text-chalk-dim mt-1">
             Give them the code <span className="font-mono font-bold text-chalk">{room.code}</span> — the match starts the
-            moment they join.
+            moment {teams ? 'all four seats are filled' : 'they join'}.
           </p>
         </Card>
       )}
@@ -191,10 +259,22 @@ export function Room() {
       {room.status === 'finished' && (
         <Card className="p-6 text-center">
           <div className="text-3xl font-extrabold mb-1">
-            {room.winnerId === null ? 'Draw' : room.winnerId === profile.playerId ? 'You win' : 'You lose'}
+            {teams
+              ? room.winnerTeam === null
+                ? 'Drawn'
+                : room.winnerTeam === mySide
+                  ? 'Your side wins'
+                  : 'Your side loses'
+              : room.winnerId === null
+                ? 'Draw'
+                : room.winnerId === profile.playerId
+                  ? 'You win'
+                  : 'You lose'}
           </div>
           <p className="text-[13px] text-chalk-dim">
-            {me.correct} correct against {opponent?.correct ?? 0}.
+            {teams
+              ? `${tally(mySide)} correct against ${tally(mySide === 0 ? 1 : 0)}.`
+              : `${me.correct} correct against ${opponent?.correct ?? 0}.`}
           </p>
           <div className="flex gap-2 justify-center mt-5">
             <Link to="/arena" className="btn-primary">

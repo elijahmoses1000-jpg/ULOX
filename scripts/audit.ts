@@ -7,6 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { PUZZLES, PUZZLE_BY_ID } from '../src/lib/puzzles';
 import { ALL_TOPICS, ROADMAPS, TOPIC_BY_ID } from '../src/lib/curriculum';
 import { PATTERN_BY_ID } from '../src/lib/patterns';
@@ -14,6 +15,8 @@ import { STAGES } from '../src/lib/journey';
 import { BUILD_TASKS, BUILD_TASK_BY_STAGE, evaluateTask } from '../src/lib/build-tasks';
 import { CHEATSHEET_INDEX } from '../backend/cheatsheet-index';
 import { STAGE_REQUIREMENTS } from '../backend/certificates';
+import { NODE_GROUPS, NODE_TYPES, TYPES_BY_GROUP } from '../src/lib/node-catalog';
+import { KIND_META, NodeKind, makeNode } from '../src/lib/agentic';
 
 const problems: string[] = [];
 const notes: string[] = [];
@@ -357,6 +360,64 @@ for (const [file, src] of backendSrc) {
   if (src.includes('@appdeploy/client')) fail(`${file}: backend must never import @appdeploy/client`);
   if (/ws\.(connect|publish|subscribe)\(/.test(src)) fail(`${file}: illegal ws.* call in backend`);
 }
+// --- node catalog -------------------------------------------------------------
+// Every part has to compile to a real primitive and arrive with the contract
+// its palette entry promises, or the Lab offers a part that cannot be built.
+{
+  const ids = new Set<string>();
+  const kinds = Object.keys(KIND_META) as NodeKind[];
+  for (const type of NODE_TYPES) {
+    if (ids.has(type.id)) fail(`node catalog: duplicate id "${type.id}"`);
+    ids.add(type.id);
+    if (!kinds.includes(type.kind)) fail(`node catalog: "${type.id}" compiles to unknown kind "${type.kind}"`);
+    if (!NODE_GROUPS.includes(type.group)) fail(`node catalog: "${type.id}" is in unknown group "${type.group}"`);
+    if (type.kind === 'tool' && !type.contract) fail(`node catalog: tool "${type.id}" has no contract`);
+    if (type.contract && !type.contract.output.includes(':')) {
+      fail(`node catalog: "${type.id}" output "${type.contract.output}" is not name:type`);
+    }
+
+    // The starter contract must leave the three decisions that matter unmade.
+    const built = makeNode(type.kind, { type: type.id });
+    if (built.label !== type.label) fail(`node catalog: "${type.id}" builds a node labelled "${built.label}"`);
+    for (const key of ['outcome', 'language', 'security'] as const) {
+      if ((built.itols?.[key] ?? '').trim()) fail(`node catalog: "${type.id}" pre-fills ${key}, which the learner must write`);
+    }
+  }
+  for (const { group, types } of TYPES_BY_GROUP) {
+    if (!types.length) fail(`node catalog: group "${group}" is empty`);
+  }
+  const uncovered = kinds.filter(k => !NODE_TYPES.some(t => t.kind === k));
+  if (uncovered.length) fail(`node catalog: no part compiles to ${uncovered.join(', ')}`);
+  if (!problems.length) {
+    ok(`node catalog: ${NODE_TYPES.length} parts across ${NODE_GROUPS.length} groups, every primitive covered`);
+  }
+}
+
+// --- backend typecheck ---------------------------------------------------------
+// tsconfig.json includes only "src", so until now nothing checked the backend
+// at all. That is how `detach` came to drop two required fields and silently
+// turn every team match back into a duel.
+//
+// The platform SDK ships no types, so three error classes are unavoidable
+// noise rather than defects: generic calls on an untyped import, the modules
+// the platform injects at deploy time, and `unknown` in a catch. Everything
+// else is ours.
+{
+  let output = '';
+  try {
+    execSync('npx tsc -p tsconfig.backend.json --noEmit', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (err) {
+    output = String((err as { stdout?: string }).stdout ?? '');
+  }
+  const noise = /TS2347|TS2307|TS18046|type 'never'/;
+  const real = output
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => /error TS/.test(l) && !noise.test(l));
+  for (const line of real) fail(`backend typecheck: ${line}`);
+  if (!real.length) ok('backend typechecks (platform-SDK noise filtered)');
+}
+
 const pkg = JSON.parse(read('package.json'));
 for (const dep of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })) {
   if (dep.startsWith('@appdeploy/')) fail(`package.json must not list ${dep} (platform-injected)`);

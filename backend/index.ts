@@ -76,6 +76,8 @@ interface RoomPlayer {
     name: string;
     colour: string;
     rating: number;
+    /** 0 or 1. In a duel it is just which seat; in a team match it is the side. */
+    team: number;
     index: number;
     correct: number;
     finishedAt: number | null;
@@ -90,15 +92,29 @@ interface ChatMessage {
     at: number;
 }
 
+type RoomMode = "duel" | "team";
+
 interface RoomRecord {
     code: string;
     seed: string;
+    mode: RoomMode;
     puzzleIds: string[];
     players: RoomPlayer[];
     chat: ChatMessage[];
     status: "waiting" | "playing" | "finished";
     winnerId: string | null;
+    /** Set instead of winnerId when the match was played in teams. */
+    winnerTeam: number | null;
     createdAt: number;
+}
+
+/** Rooms made before team play existed have neither field. */
+function modeOf(room: RoomRecord): RoomMode {
+    return room.mode === "team" ? "team" : "duel";
+}
+
+function seatsFor(mode: RoomMode): number {
+    return mode === "team" ? 4 : 2;
 }
 
 function str(value: unknown, fallback = ""): string {
@@ -177,16 +193,20 @@ async function loadRoom(id: string): Promise<(RoomRecord & { id: string }) | nul
     return { ...(record as RoomRecord), chat: (record as RoomRecord).chat ?? [], id };
 }
 
+/**
+ * Strip the storage id and take a copy that is safe to mutate.
+ *
+ * Spread rather than a field list. The list version silently dropped `mode`
+ * and `winnerTeam` when team play was added, so a four-seat match reverted to
+ * a duel on the first write after it was created — and nothing failed, it
+ * just quietly became a different game.
+ */
 function detach(room: RoomRecord & { id: string }): RoomRecord {
+    const { id: _id, ...rest } = room;
     return {
-        code: room.code,
-        seed: room.seed,
-        puzzleIds: room.puzzleIds,
+        ...rest,
         players: room.players.map(p => ({ ...p })),
         chat: (room.chat ?? []).map(m => ({ ...m })),
-        status: room.status,
-        winnerId: room.winnerId,
-        createdAt: room.createdAt,
     };
 }
 
@@ -204,10 +224,36 @@ function identityFrom(body: unknown): RoomPlayer | null {
         name: str(b.name, "Guest").slice(0, 24),
         colour: str(b.colour, "#EE1B24"),
         rating: num(b.rating, 1200),
+        team: 0,
         index: 0,
         correct: 0,
         finishedAt: null,
     };
+}
+
+/**
+ * Put a player in a seat.
+ *
+ * Returns a reason when there is no seat for them, so both join routes fail
+ * the same way. Re-joining a match you are already in is a no-op, not an
+ * error: a refresh must not cost you your seat.
+ */
+function seatPlayer(room: RoomRecord, player: RoomPlayer): string | null {
+    if (room.players.some(p => p.playerId === player.playerId)) return null;
+    const mode = modeOf(room);
+    if (room.players.length >= seatsFor(mode)) return "That match is already full";
+
+    // Fill the thinner side, so a team match cannot end up 3 v 1 because of
+    // the order people happened to arrive in.
+    const onZero = room.players.filter(p => p.team === 0).length;
+    const onOne = room.players.filter(p => p.team === 1).length;
+    const team = mode === "team" ? (onOne < onZero ? 1 : 0) : 1;
+    room.players.push({ ...player, team });
+
+    // A duel starts as soon as the second player is in. A team match waits for
+    // all four, or two people would be racing two empty seats.
+    if (room.players.length >= (mode === "team" ? seatsFor(mode) : 2)) room.status = "playing";
+    return null;
 }
 
 function settle(room: RoomRecord) {
@@ -215,6 +261,28 @@ function settle(room: RoomRecord) {
     const everyoneDone = room.players.length >= 2 && room.players.every(p => p.index >= total);
     if (!everyoneDone) return;
     room.status = "finished";
+
+    if (modeOf(room) === "team") {
+        // A team's score is its members' solves added up, and the tie-break is
+        // when the side finished rather than when its fastest member did —
+        // otherwise a pair could lose on a team-mate who was still playing.
+        const tally = (team: number) => {
+            const side = room.players.filter(p => p.team === team);
+            return {
+                correct: side.reduce((n, p) => n + p.correct, 0),
+                finishedAt: side.reduce((latest, p) => Math.max(latest, p.finishedAt ?? Infinity), 0),
+            };
+        };
+        const zero = tally(0);
+        const one = tally(1);
+        room.winnerId = null;
+        if (zero.correct !== one.correct) room.winnerTeam = zero.correct > one.correct ? 0 : 1;
+        else if (zero.finishedAt !== one.finishedAt) room.winnerTeam = zero.finishedAt < one.finishedAt ? 0 : 1;
+        else room.winnerTeam = null;
+        return;
+    }
+
+    room.winnerTeam = null;
     const [a, b] = [...room.players].sort((x, y) => {
         if (y.correct !== x.correct) return y.correct - x.correct;
         return (x.finishedAt ?? Infinity) - (y.finishedAt ?? Infinity);
@@ -223,16 +291,21 @@ function settle(room: RoomRecord) {
     else room.winnerId = a.playerId;
 }
 
-async function createRoom(player: RoomPlayer): Promise<{ room: RoomRecord & { id: string }; inviteCode: string | null } | null> {
+async function createRoom(
+    player: RoomPlayer,
+    mode: RoomMode,
+): Promise<{ room: RoomRecord & { id: string }; inviteCode: string | null } | null> {
     const code = makeCode();
     const room: RoomRecord = {
         code,
         seed: code,
+        mode,
         puzzleIds: dealPuzzles(code, MATCH_LENGTH),
-        players: [player],
+        players: [{ ...player, team: 0 }],
         chat: [],
         status: "waiting",
         winnerId: null,
+        winnerTeam: null,
         createdAt: Date.now(),
     };
 
@@ -372,7 +445,9 @@ export const handler = router({
                 return error("That player just went offline", 409);
             }
 
-            const created = await createRoom(challenger);
+            // A lobby challenge is always one on one: there is no second seat
+            // on either side to offer anybody.
+            const created = await createRoom(challenger, "duel");
             if (!created) return error("Could not create the match", 500);
 
             await announceChallenge({
@@ -394,7 +469,8 @@ export const handler = router({
         async ({ body }) => {
             const player = identityFrom(body);
             if (!player) return error("playerId is required", 400);
-            const created = await createRoom(player);
+            const mode: RoomMode = str((body as Record<string, unknown>)?.mode) === "team" ? "team" : "duel";
+            const created = await createRoom(player, mode);
             if (!created) return error("Could not create the match", 500);
             return json({ room: created.room, inviteCode: created.inviteCode });
         },
@@ -412,11 +488,8 @@ export const handler = router({
             if (!match) return error("No open match with that code", 404);
 
             const room = detach(match as unknown as RoomRecord & { id: string });
-            if (!room.players.some(p => p.playerId === player.playerId)) {
-                if (room.players.length >= 2) return error("That match is already full", 409);
-                room.players.push(player);
-                room.status = "playing";
-            }
+            const refused = seatPlayer(room, player);
+            if (refused) return error(refused, 409);
             await saveRoom(match.id, room);
             return json({ room: { ...room, id: match.id } });
         },
@@ -518,11 +591,8 @@ export const handler = router({
             if (!loaded) return error("Match not found", 404);
             const room = detach(loaded);
 
-            if (!room.players.some(p => p.playerId === player.playerId)) {
-                if (room.players.length >= 2) return error("That match is already full", 409);
-                room.players.push(player);
-                room.status = "playing";
-            }
+            const refused = seatPlayer(room, player);
+            if (refused) return error(refused, 409);
             await saveRoom(roomId, room);
             return json({ room: { ...room, id: roomId } });
         },

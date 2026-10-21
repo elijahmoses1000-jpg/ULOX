@@ -191,6 +191,7 @@ interface ProfileState {
   ) => number;
   recordRush: (score: number) => void;
   recordArena: (result: 'win' | 'loss' | 'draw', opponentRating: number) => void;
+  recordDuel: (result: 'win' | 'loss' | 'draw') => void;
   push: () => Promise<void>;
   restoreSession: () => Promise<void>;
   signIn: () => Promise<{ ok: boolean; message?: string }>;
@@ -316,6 +317,24 @@ export const useProfile = create<ProfileState>((set, get) => ({
         xp: state.profile.xp + score * 12,
       }),
     }));
+    void get().push();
+  },
+
+  /**
+   * A game against UX moves XP and nothing else.
+   *
+   * Deliberately not rated: Glicko only means something when both sides are
+   * people whose own rating moves, and a bot that can be replayed until it
+   * loses would turn the ladder into a grinding exercise.
+   */
+  recordDuel: result => {
+    set(state => ({
+      profile: persist(state.identity, {
+        ...state.profile,
+        xp: state.profile.xp + (result === 'win' ? 70 : result === 'draw' ? 35 : 20),
+      }),
+    }));
+    get().touchStreak();
     void get().push();
   },
 

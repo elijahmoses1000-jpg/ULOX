@@ -328,6 +328,37 @@ export function analyzeGraph(graph: AgentGraph): EvalReport {
       });
     }
   }
+  // --- Outcome contracts on outputs ----------------------------------------
+  // An output is the one node whose whole job is to say what "done" means, and
+  // a loop with no stated terminal state is the most common reason an agent
+  // never stops. This is scored additively rather than as a deduction: it asks
+  // for something that was never asked for before, so it can only earn points,
+  // never retroactively fail a graph that was already sound.
+  for (const node of terminals) {
+    const stated = (key: ItolsKey) => (node.itols?.[key] ?? '').trim().length >= ITOLS_MIN_LEN[key];
+    if (stated('outcome')) {
+      push({
+        code: 'outcome_contract',
+        severity: 'good',
+        message: `"${node.label}" states what it returns and when the run ends.`,
+        fix: '',
+        nodeId: node.id,
+        delta: 0.9,
+      });
+      if (stated('language')) score += 0.3;
+      if (stated('security')) score += 0.5;
+    } else {
+      issues.push({
+        code: 'outcome_missing',
+        severity: 'warning',
+        message: `"${node.label}" has no Outcome contract. ${ITOLS_HELP.outcome.blurb}`,
+        fix: ITOLS_HELP.outcome.placeholder,
+        nodeId: node.id,
+        delta: 0,
+      });
+    }
+  }
+
   const itolsCoverage = contractual.length ? coverage / contractual.length : 0;
 
   if (agents.length === 0) {

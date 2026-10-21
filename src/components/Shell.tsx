@@ -21,6 +21,7 @@ import {
 import { bandFor, useProfile } from '../lib/profile';
 import { LevelSwitcher } from './Level';
 import { Avatar, Logo, useToast } from './ui';
+import { UxGuide } from './UxGuide';
 
 // Five destinations, each a place a person recognises. Everything optional
 // lives behind Explore, so a new arrival is never choosing between nine doors.
@@ -29,7 +30,7 @@ const PRIMARY = [
   { to: '/train', label: 'Practice', icon: Swords, end: false },
   { to: '/lab', label: 'Build', icon: Target, end: false },
   { to: '/explore', label: 'Explore', icon: Map, end: false },
-  { to: '/live', label: 'Play', icon: Radio, end: false },
+  { to: '/play', label: 'Play', icon: Radio, end: false },
 ];
 
 const SECONDARY = [
@@ -186,6 +187,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className={`grow min-w-0 ${immersive ? '' : 'pb-20 lg:pb-0'}`}>{children}</main>
+
+      {/* UX follows the person rather than the page: the screen where someone
+          is most lost is rarely the screen with the answer on it. */}
+      <UxGuide />
 
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-ink-850/97 backdrop-blur border-t border-ink-750 safe-bottom">
