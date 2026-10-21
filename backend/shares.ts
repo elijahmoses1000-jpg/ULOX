@@ -221,6 +221,32 @@ export async function countRemix(code: string): Promise<number | null> {
     return remixes;
 }
 
+/**
+ * Delete a build you published.
+ *
+ * Ownership is the playerId the share was created with, which is the same
+ * trust level as the rest of the app: a guest's id lives in their browser and
+ * is asserted by the client, not proved. That is enough for "remove the thing
+ * I just posted" and is not enough to protect against someone who copies
+ * another player's id. The operator route behind ULOX_ADMIN_TOKEN remains the
+ * way to remove a build you do not own.
+ */
+export type OwnerDeleteResult = "deleted" | "not_found" | "not_yours" | "failed";
+
+export async function deleteOwnShare(code: string, playerId: string): Promise<OwnerDeleteResult> {
+    const wanted = (code ?? "").trim().toUpperCase();
+    const owner = (playerId ?? "").trim();
+    if (!wanted || !owner) return "not_found";
+
+    const { items } = await db.list<Share>(SHARES, { limit: 1000 });
+    const found = items.find(s => (s.code ?? "").toUpperCase() === wanted) as (Share & { id: string }) | undefined;
+    if (!found) return "not_found";
+    if (found.authorPlayerId !== owner) return "not_yours";
+
+    const [ok] = await db.delete(SHARES, [found.id]);
+    return ok ? "deleted" : "failed";
+}
+
 /** Everything one player has published, newest first. */
 export async function listShares(playerId: string): Promise<Share[]> {
     const { items } = await db.list<Share>(SHARES, { limit: 1000 });

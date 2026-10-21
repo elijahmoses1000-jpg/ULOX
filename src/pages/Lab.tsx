@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { BookOpen, Bot, ChevronLeft, GitFork, Hammer, HelpCircle, MessageSquareText, Plug, Share2, X } from 'lucide-react';
+import { BookOpen, Bot, ChevronLeft, GitFork, Hammer, HelpCircle, MessageSquareText, Network, Plug, Share2, X } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { MockInjection } from '../lib/simulator';
 import { PATTERNS, PATTERN_BY_ID, presetGraph } from '../lib/patterns';
@@ -12,6 +12,8 @@ import { BUILD_TASK_BY_STAGE, evaluateTask } from '../lib/build-tasks';
 import { BuildGuide } from '../components/BuildGuide';
 import { PublishDialog } from '../components/PublishDialog';
 import { BuildHelp, useFirstRunHelp } from '../components/BuildHelp';
+import { Blueprint } from '../components/Blueprint';
+import { PATTERN_BY_ID as PATTERNS_BY_ID } from '../lib/patterns';
 import { Workbench } from '../components/Workbench';
 import { Chip, Modal, useToast } from '../components/ui';
 
@@ -51,6 +53,7 @@ export function Lab() {
   const [forked, setForked] = useState<{ code: string; title: string; authorName: string } | null>(null);
   const [helpOpen, setHelpOpen] = useFirstRunHelp();
   const [publishOpen, setPublishOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [score, setScore] = useState(0);
   const [mentorOpen, setMentorOpen] = useState(false);
   const [mentorText, setMentorText] = useState('');
@@ -162,6 +165,10 @@ export function Lab() {
     toast('Step built. Head back to the journey for what is next.', 'ok');
   };
 
+  // What the build is aiming at: the stage's pattern on a guided build, the
+  // loaded pattern otherwise. A blank canvas has no target, so no blueprint.
+  const blueprint = task ? PATTERNS_BY_ID.get(task.pattern) ?? null : pattern ?? null;
+
   const guide = stage && task && (
     <BuildGuide
       task={task}
@@ -170,6 +177,7 @@ export function Lab() {
       built={stageBuilt}
       onMarkBuilt={markStageBuilt}
       onShare={() => setPublishOpen(true)}
+      onShowPlan={blueprint ? () => setPlanOpen(true) : undefined}
     />
   );
 
@@ -240,8 +248,17 @@ export function Lab() {
       {/* During a journey build the switcher is hidden: every chip navigates
           away without ?stage=, which silently abandons the task and the work
           done so far. One link out, clearly labelled, is enough. */}
+      {blueprint && (
+        <button
+          className="ml-auto btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0"
+          onClick={() => setPlanOpen(true)}
+          title="See the shape before you wire it"
+        >
+          <Network size={12} /> See the shape
+        </button>
+      )}
       <button
-        className="ml-auto btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0"
+        className={`${blueprint ? '' : 'ml-auto '}btn-quiet !px-2.5 !py-1.5 !text-[11px] shrink-0`}
         onClick={() => setHelpOpen(true)}
         title="What this screen is and how to drive it"
       >
@@ -359,6 +376,16 @@ export function Lab() {
         onPositionChange={p => setScore(p.report.score)}
       />
       <BuildHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {blueprint && (
+        <Blueprint
+          open={planOpen}
+          onClose={() => setPlanOpen(false)}
+          target={blueprint.graph}
+          mine={graph}
+          title={task ? task.making : blueprint.name}
+          subtitle={task ? task.youHave : blueprint.summary}
+        />
+      )}
       <PublishDialog
         open={publishOpen}
         onClose={() => setPublishOpen(false)}

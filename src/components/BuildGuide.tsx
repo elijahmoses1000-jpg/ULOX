@@ -1,4 +1,4 @@
-import { Check, Circle, Hammer, Lightbulb, MousePointerClick, Share2 } from 'lucide-react';
+import { Check, Circle, Hammer, Lightbulb, MousePointerClick, Network, Share2 } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { BuildTask, evaluateTask } from '../lib/build-tasks';
 
@@ -21,6 +21,7 @@ export function BuildGuide({
   built,
   onMarkBuilt,
   onShare,
+  onShowPlan,
 }: {
   task: BuildTask;
   graph: AgentGraph;
@@ -28,6 +29,7 @@ export function BuildGuide({
   built: boolean;
   onMarkBuilt: () => void;
   onShare?: () => void;
+  onShowPlan?: () => void;
 }) {
   const { results, next, done, total, complete } = evaluateTask(task, graph);
 
@@ -48,6 +50,12 @@ export function BuildGuide({
         <span className="text-chalk-faint">On the canvas now: </span>
         {task.youHave}
       </p>
+
+      {onShowPlan && (
+        <button className="btn-ghost w-full !text-xs mt-3" onClick={onShowPlan}>
+          <Network size={13} /> See the shape first
+        </button>
+      )}
 
       <div
         className="h-1 rounded-full bg-ink-750 mt-3 overflow-hidden"

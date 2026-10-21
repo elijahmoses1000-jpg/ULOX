@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { Copy, Eye, GitFork, Image, Play, Share2, Sparkles, Square, Video } from 'lucide-react';
+import { Copy, Eye, GitFork, Image, Play, Share2, Sparkles, Square, Trash2, Video } from 'lucide-react';
 import { AgentGraph } from '../lib/agentic';
 import { MockInjection, simulate } from '../lib/simulator';
 import { analyzeGraph } from '../lib/analyzer';
 import { GraphCanvas } from '../components/GraphCanvas';
 import { Card, Chip, Logo, useToast } from '../components/ui';
+import { ShareSheet } from '../components/ShareSheet';
+import { useProfile } from '../lib/profile';
 import { buildCardBlob, download, shareBlob, shareUrl } from '../lib/share-card';
 import { RECORDING_SIZE, extensionFor, preferredFormat, recordRun, recorderSupported } from '../lib/run-recorder';
 
@@ -15,6 +17,7 @@ interface SharedRecord {
   title: string;
   note: string;
   authorName: string;
+  authorPlayerId?: string;
   origin: string;
   graph: AgentGraph;
   score: number;
@@ -55,6 +58,10 @@ export function SharedBuild() {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [sheet, setSheet] = useState<'link' | 'run' | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const playerId = useProfile(s => s.profile.playerId);
   const canRecord = useMemo(() => recorderSupported(), []);
   const recFormat = useMemo(() => preferredFormat(), []);
   const timer = useRef<number | null>(null);
@@ -120,6 +127,28 @@ export function SharedBuild() {
     // would be overwritten the moment it mounts. Going through the URL also
     // means a forked Lab survives a refresh and can be linked to.
     navigate(`/lab?from=${encodeURIComponent(record.code)}`);
+  };
+
+  /**
+   * Unpublish your own build.
+   *
+   * Ownership is the playerId the share was created with — the same trust
+   * level as the rest of the app. The server checks it again; this only
+   * decides whether to offer the button.
+   */
+  const removeBuild = async () => {
+    if (!record) return;
+    setRemoving(true);
+    try {
+      await api.post(`/api/shares/${encodeURIComponent(record.code)}/delete`, { playerId });
+      toast('Build removed. This link no longer opens.', 'ok');
+      navigate('/gallery');
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast(status === 403 ? 'That build was published by someone else.' : 'Could not remove that build.', 'err');
+      setRemoving(false);
+      setConfirmRemove(false);
+    }
   };
 
   /**
@@ -202,6 +231,7 @@ export function SharedBuild() {
   const visited = playhead > 0 || running ? sim.steps.slice(0, playhead + 1).map(s => s.nodeId) : [];
   const activeNode = running || playhead > 0 ? sim.steps[playhead]?.nodeId ?? null : null;
   const step = sim.steps[playhead];
+  const isMine = !!playerId && record.authorPlayerId === playerId;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-5 lg:py-8">
@@ -294,8 +324,8 @@ export function SharedBuild() {
         <button className="btn-primary !text-xs" onClick={remix}>
           <GitFork size={13} /> Open this in my Lab
         </button>
-        <button className="btn-ghost !text-xs" onClick={() => exportCard('share')} disabled={busy}>
-          <Share2 size={13} /> {busy ? 'Preparing…' : 'Share'}
+        <button className="btn-ghost !text-xs" onClick={() => setSheet('link')}>
+          <Share2 size={13} /> Share
         </button>
         <button className="btn-ghost !text-xs" onClick={() => exportCard('download')} disabled={busy}>
           <Image size={13} /> Card
@@ -311,6 +341,11 @@ export function SharedBuild() {
             {recording ? 'Recording the run…' : `Save the run (${(recFormat ?? '').toUpperCase()})`}
           </button>
         )}
+        {canRecord && (
+          <button className="btn-ghost !text-xs" onClick={() => setSheet('run')} disabled={recording}>
+            <Share2 size={13} /> Share the run
+          </button>
+        )}
         <button
           className="btn-quiet !text-xs"
           onClick={async () => {
@@ -324,7 +359,32 @@ export function SharedBuild() {
         >
           <Copy size={13} /> Copy link
         </button>
+
+        {/* Only the author is offered this, and only ever as two taps: a
+            publish can be undone by deleting, a delete cannot be undone. */}
+        {isMine &&
+          (confirmRemove ? (
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              <span className="text-[11.5px] text-chalk-dim">Remove this build for good?</span>
+              <button className="btn-primary !text-xs" disabled={removing} onClick={removeBuild}>
+                {removing ? 'Removing…' : 'Yes, remove'}
+              </button>
+              <button className="btn-quiet !text-xs" onClick={() => setConfirmRemove(false)}>
+                Keep it
+              </button>
+            </span>
+          ) : (
+            <button className="btn-quiet !text-xs" onClick={() => setConfirmRemove(true)}>
+              <Trash2 size={13} /> Remove
+            </button>
+          ))}
       </div>
+
+      {isMine && !confirmRemove && (
+        <p className="text-[11px] text-chalk-faint mt-2">
+          You published this, so you can remove it. The link stops opening for everyone the moment you do.
+        </p>
+      )}
 
       {/* The one line that has to convert a stranger. */}
       <Card className="p-4 mt-5 flex items-center gap-3 flex-wrap">
@@ -337,6 +397,40 @@ export function SharedBuild() {
           Start free
         </Link>
       </Card>
+
+      {/* Sharing the build: everyone gets the link; a browser with a native
+          sheet can also hand over the card image itself. */}
+      <ShareSheet
+        open={sheet === 'link'}
+        onClose={() => setSheet(null)}
+        title="Share this build"
+        url={shareUrl(record.code)}
+        text={`${record.title} — an agent built on UloX`}
+        busy={busy}
+        nativeLabel="Share with the card image"
+        nativeNote="Sends the 1080×1080 card as a file wherever your device can — messages, notes, anywhere."
+        onNativeShare={() => {
+          setSheet(null);
+          void exportCard('share');
+        }}
+      />
+
+      {/* Sharing the run: same networks, and the native sheet carries the
+          actual 1080×1080 MP4 rather than a still. */}
+      <ShareSheet
+        open={sheet === 'run'}
+        onClose={() => setSheet(null)}
+        title="Share the run"
+        url={shareUrl(record.code)}
+        text={`Watch ${record.title} run — built on UloX`}
+        busy={recording}
+        nativeLabel={`Share the ${(recFormat ?? 'video').toUpperCase()} recording`}
+        nativeNote={`Records the run at ${RECORDING_SIZE.width}×${RECORDING_SIZE.height} first, then hands the file to your device's share sheet.`}
+        onNativeShare={() => {
+          setSheet(null);
+          void exportRun('share');
+        }}
+      />
     </div>
   );
 }

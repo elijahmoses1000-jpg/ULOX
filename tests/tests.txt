@@ -77,3 +77,18 @@ Steps:
 3. Click "Join"
 
 Expected: A visible error message about the match code is shown and the match screen is still displayed.
+
+## Test 6 - See the shape, publish a build, then remove it again
+Viewport: desktop
+Covers: build blueprint mind map, publish a build, published-build listing, author-only removal, destructive-action confirmation
+Description: Verifies the Build screen explains the target architecture before wiring, and that a build you publish is yours to unpublish.
+
+Steps:
+1. Click "Skip" on the welcome screen, then open "Build" from the navigation
+2. Click "See the shape" and read the diagram, then click "Start building"
+3. Click "Share build", type "Research loop that stops when it has enough" as the title and click "Publish"
+4. Open "Published" from the navigation and select the "Mine" tab
+5. Click "Remove" on the build titled "Research loop that stops when it has enough", then click "Yes, remove"
+6. Refresh the page and select the "Mine" tab again
+
+Expected: The diagram dialog shows node and arrow labels before the build starts; after publishing, the build appears under "Mine"; after removal and the refresh it is gone from the list.

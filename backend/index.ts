@@ -4,7 +4,7 @@ import { announceChallenge, leave, listOnline, ping } from "./live";
 import { getCatalog, getStructure, getTopic } from "./roadmaps";
 import { ResourceKindId, SOURCES, getResources } from "./resources";
 import { getGlossary } from "./glossary";
-import { countRemix, getShare, listShares, publishShare, recentShares } from "./shares";
+import { countRemix, deleteOwnShare, getShare, listShares, publishShare, recentShares } from "./shares";
 import {
     certificateStatus,
     claimCertificate,
@@ -609,6 +609,19 @@ export const handler = router({
             const share = await getShare(params.code, query?.count !== "0");
             if (!share) return error("No published build with that code", 404);
             return json({ share });
+        },
+    ],
+
+    "POST /api/shares/:code/delete": [
+        async ({ params, body }) => {
+            const playerId = str((body as Record<string, unknown> | undefined)?.playerId);
+            if (!playerId) return error("playerId is required", 400);
+            const outcome = await deleteOwnShare(params.code, playerId);
+            if (outcome === "deleted") return json({ deleted: true, code: params.code });
+            if (outcome === "not_found") return error("No published build with that code", 404);
+            // Deliberately distinct from 404: the build exists, it is not yours.
+            if (outcome === "not_yours") return error("That build was published by someone else", 403);
+            return error("Could not remove that build", 500);
         },
     ],
 
