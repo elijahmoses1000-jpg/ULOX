@@ -24,6 +24,7 @@ import {
 import { useProfile } from '../lib/profile';
 import { useLevel } from '../lib/level';
 import { Markdown } from '../components/Markdown';
+import { OUTAGE_DETAIL, OUTAGE_TITLE, isServiceOutage } from '../lib/outage';
 import { Card, Chip, Modal, Progress, useToast } from '../components/ui';
 
 type Side = 'top' | 'right' | 'bottom' | 'left';
@@ -151,7 +152,7 @@ export function RoadmapView() {
         setStructure(res.data?.roadmap ?? null);
         if (!res.data?.roadmap) setError('That roadmap could not be loaded.');
       })
-      .catch(() => !cancelled && setError('That roadmap could not be loaded right now.'))
+      .catch(err => !cancelled && setError(isServiceOutage(err) ? `${OUTAGE_TITLE}. ${OUTAGE_DETAIL}` : 'That roadmap could not be loaded right now.'))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;

@@ -4,6 +4,7 @@ import { api } from '@appdeploy/client';
 import { ExternalLink, Loader2, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { useProfile } from '../lib/profile';
 import { ROADMAPS } from '../lib/curriculum';
+import { OUTAGE_DETAIL, OUTAGE_TITLE, isServiceOutage } from '../lib/outage';
 import { Card, Chip, useToast } from '../components/ui';
 
 interface CatalogEntry {
@@ -34,6 +35,7 @@ export function Paths() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [outage, setOutage] = useState(false);
   const [query, setQuery] = useState('');
 
   const load = async (refresh = false) => {
@@ -43,10 +45,16 @@ export function Paths() {
       const list = (res.data?.roadmaps ?? []) as CatalogEntry[];
       setCatalog(list);
       setFailed(list.length === 0);
+      setOutage(false);
       if (refresh) toast(`${list.length} roadmaps synced from roadmap.sh`, 'ok');
-    } catch {
+    } catch (err) {
+      // Our own service being down is a different sentence from roadmap.sh
+      // being down, and sending someone to retry against the wrong one wastes
+      // their time.
+      const down = isServiceOutage(err);
+      setOutage(down);
       setFailed(true);
-      if (refresh) toast('Could not reach the roadmap source right now.', 'err');
+      if (refresh) toast(down ? OUTAGE_TITLE : 'Could not reach the roadmap source right now.', 'err');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -130,12 +138,14 @@ export function Paths() {
         </div>
       ) : failed ? (
         <Card className="p-6 text-center">
-          <p className="text-[13.5px] text-chalk">The roadmap catalogue could not be reached.</p>
-          <p className="text-[12.5px] text-chalk-dim mt-1">
-            UloX Core above works offline and is unaffected. Try syncing again in a moment.
+          <p className="text-[13.5px] text-chalk">
+            {outage ? OUTAGE_TITLE : 'The roadmap catalogue could not be reached.'}
+          </p>
+          <p className="text-[12.5px] text-chalk-dim mt-1 max-w-md mx-auto leading-relaxed">
+            {outage ? OUTAGE_DETAIL : 'UloX Core above works offline and is unaffected. Try syncing again in a moment.'}
           </p>
           <button className="btn-ghost !text-xs mt-4" onClick={() => load(true)}>
-            <RefreshCw size={13} /> Retry
+            <RefreshCw size={13} /> {outage ? 'Check again' : 'Retry'}
           </button>
         </Card>
       ) : (
