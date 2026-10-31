@@ -16,6 +16,7 @@ import { BUILD_TASKS, BUILD_TASK_BY_STAGE, evaluateTask } from '../src/lib/build
 import { CHEATSHEET_INDEX } from '../backend/cheatsheet-index';
 import { STAGE_REQUIREMENTS } from '../backend/certificates';
 import { NODE_GROUPS, NODE_TYPES, TYPES_BY_GROUP } from '../src/lib/node-catalog';
+import { SOURCES } from '../backend/resources';
 import { KIND_META, NodeKind, makeNode } from '../src/lib/agentic';
 
 const problems: string[] = [];
@@ -391,6 +392,31 @@ for (const [file, src] of backendSrc) {
   if (!problems.length) {
     ok(`node catalog: ${NODE_TYPES.length} parts across ${NODE_GROUPS.length} groups, every primitive covered`);
   }
+}
+
+// --- toolkit collections -------------------------------------------------------
+// Three lists name the same collections: the backend's SOURCES (what the route
+// will serve), the Toolkit's TABS (what has a label and a pitch), and SHELVES
+// (what is actually on screen). A source with no tab is unreachable; a tab with
+// no source 404s; a tab on no shelf is invisible.
+{
+  const toolkit = read('src/pages/Toolkit.tsx');
+  const tabsBlock = /const TABS[^=]*=\s*\[([\s\S]*?)\n\];/.exec(toolkit)?.[1] ?? '';
+  const shelvesBlock = /const SHELVES[^=]*=\s*\[([\s\S]*?)\n\];/.exec(toolkit)?.[1] ?? '';
+  const tabIds = [...tabsBlock.matchAll(/id:\s*'([a-z]+)'/g)].map(m => m[1]);
+  const shelved = [...shelvesBlock.matchAll(/ids:\s*\[([^\]]*)\]/g)].flatMap(m => [...m[1].matchAll(/'([a-z]+)'/g)].map(x => x[1]));
+  const served = Object.keys(SOURCES);
+
+  if (!tabIds.length) fail('toolkit: could not read the TABS list from Toolkit.tsx');
+  for (const id of served) if (!tabIds.includes(id)) fail(`toolkit: backend serves "${id}" but no tab offers it`);
+  for (const id of tabIds) if (!served.includes(id)) fail(`toolkit: tab "${id}" has no backend source (it would 404)`);
+  for (const id of tabIds) {
+    const n = shelved.filter(x => x === id).length;
+    if (n === 0) fail(`toolkit: tab "${id}" is on no shelf, so nobody can reach it`);
+    if (n > 1) fail(`toolkit: tab "${id}" appears on ${n} shelves`);
+  }
+  for (const id of shelved) if (!tabIds.includes(id)) fail(`toolkit: shelf names "${id}", which is not a tab`);
+  if (!problems.length) ok(`toolkit: ${served.length} collections served, tabbed and shelved exactly once`);
 }
 
 // --- backend typecheck ---------------------------------------------------------

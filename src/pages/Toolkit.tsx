@@ -1,10 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@appdeploy/client';
-import { BookOpen, Compass, ExternalLink, FileText, Hammer, Plug, Search, Sparkles, Star, Target } from 'lucide-react';
-import { Card, Chip, Empty, Tabs, useToast } from '../components/ui';
+import {
+  BookOpen,
+  Code2,
+  Compass,
+  ExternalLink,
+  FileText,
+  GraduationCap,
+  Hammer,
+  Network,
+  Plug,
+  Rocket,
+  Search,
+  Sparkles,
+  Star,
+  Target,
+} from 'lucide-react';
+import { Card, Chip, Empty, useToast } from '../components/ui';
 
-type KindId = 'apis' | 'projects' | 'books' | 'lists' | 'practice' | 'cheatsheets' | 'careers' | 'builds';
+type KindId =
+  | 'apis'
+  | 'projects'
+  | 'tutorials'
+  | 'books'
+  | 'lists'
+  | 'python'
+  | 'practice'
+  | 'design'
+  | 'interview'
+  | 'cheatsheets'
+  | 'careers'
+  | 'builds';
 
 interface ResourceItem {
   title: string;
@@ -30,9 +57,28 @@ const TABS: Array<{ id: KindId; label: string; icon: typeof Plug; pitch: string 
   { id: 'builds', label: 'Challenges', icon: Target, pitch: 'Graded projects with stages and an hour estimate.' },
   { id: 'careers', label: 'Careers', icon: Compass, pitch: 'Where these skills lead, and the hours each route takes.' },
   { id: 'projects', label: 'Clone it', icon: Hammer, pitch: 'Rebuild the real thing from scratch, step by step.' },
+  { id: 'tutorials', label: 'Tutorials', icon: Rocket, pitch: 'Tutorials that end in a working project, by language.' },
   { id: 'practice', label: 'Practice', icon: Star, pitch: 'freeCodeCamp certifications and challenge blocks.' },
+  { id: 'design', label: 'System design', icon: Network, pitch: 'How large systems are built — every concept linked to its explanation, plus interview questions with solutions.' },
+  { id: 'interview', label: 'Interview prep', icon: GraduationCap, pitch: 'A complete interview study plan, its resources filed by topic.' },
   { id: 'books', label: 'Books', icon: BookOpen, pitch: 'Free books and courses, by language and subject.' },
   { id: 'lists', label: 'Lists', icon: Sparkles, pitch: 'The awesome index — a curated list for almost anything.' },
+  { id: 'python', label: 'Python', icon: Code2, pitch: 'Hand-picked Python frameworks and libraries, by category.' },
+];
+
+const TAB_BY_ID = new Map(TABS.map(t => [t.id, t]));
+
+/**
+ * Twelve collections is too many for one row of tabs: the strip scrolls with
+ * its scrollbar hidden, so on a phone two-thirds of them were simply not there
+ * as far as anyone could tell. Grouped by what a learner is trying to do, they
+ * wrap instead, and every one stays in view.
+ */
+const SHELVES: Array<{ label: string; ids: KindId[] }> = [
+  { label: 'Build things', ids: ['builds', 'projects', 'tutorials', 'apis'] },
+  { label: 'Understand', ids: ['cheatsheets', 'design', 'practice'] },
+  { label: 'Get hired', ids: ['interview', 'careers'] },
+  { label: 'Read & browse', ids: ['books', 'lists', 'python'] },
 ];
 
 /** The Lab reads this on mount and offers to add the API as a Tool node. */
@@ -96,12 +142,36 @@ export function Toolkit() {
       <header className="mb-4">
         <h1 className="font-display text-2xl font-bold tracking-tight">Toolkit</h1>
         <p className="text-sm text-chalk-dim mt-1 max-w-2xl">
-          Five open collections, searchable in one place. Everything here is a real link to a real resource — nothing is
-          generated.
+          {TABS.length} collections from ten open-source projects, searchable in one place. Everything here is a real
+          link to a real resource — nothing is generated.
         </p>
       </header>
 
-      <Tabs<KindId> active={kind} onChange={setKind} tabs={TABS.map(t => ({ id: t.id, label: t.label }))} className="mb-3" />
+      <nav className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4" aria-label="Collections">
+        {SHELVES.map(shelf => (
+          <div key={shelf.label} className="panel-flat p-2 min-w-0">
+            <div className="label mb-1.5 px-1">{shelf.label}</div>
+            <div className="flex flex-wrap gap-1">
+              {shelf.ids.map(id => {
+                const tab = TAB_BY_ID.get(id)!;
+                const on = kind === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setKind(id)}
+                    aria-pressed={on}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition inline-flex items-center gap-1.5 max-w-full
+                      ${on ? 'bg-brand text-white' : 'text-chalk-dim hover:text-chalk hover:bg-ink-750'}`}
+                  >
+                    <tab.icon size={12} className="shrink-0" />
+                    <span className="truncate">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
 
       <div className="flex items-start gap-2 mb-3">
         <span className="w-9 h-9 rounded-lg grid place-items-center bg-accent/12 text-accent shrink-0">
@@ -129,7 +199,7 @@ export function Toolkit() {
           >
             All
           </button>
-          {data.groups.slice(0, 60).map(g => (
+          {data.groups.map(g => (
             <button
               key={g}
               onClick={() => setGroup(g === group ? '' : g)}

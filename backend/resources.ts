@@ -1,17 +1,32 @@
 // Resource library.
 //
-// Five public repositories, parsed into one uniform shape so a single UI can
+// Ten public repositories, parsed into one uniform shape so a single UI can
 // render all of them, and cached in chunks because some of these lists run to
 // well over a thousand entries and a single record would not fit.
 //
-//   public-apis            -> real APIs, which double as Tool contracts in the Lab
-//   build-your-own-x       -> project-sized challenges
-//   free-programming-books -> reading per language and subject
-//   awesome                -> curated lists per topic
-//   freeCodeCamp           -> hands-on certifications and challenge blocks
+//   public-apis                 -> real APIs, which double as Tool contracts in the Lab
+//   build-your-own-x            -> project-sized challenges
+//   project-based-learning      -> tutorials that build something, by language
+//   free-programming-books      -> reading per language and subject
+//   awesome                     -> curated lists per topic
+//   awesome-python              -> Python libraries per category
+//   freeCodeCamp                -> hands-on certifications and challenge blocks
+//   system-design-primer        -> design topics and interview questions with solutions
+//   coding-interview-university -> a study plan's resources, by section and topic
+//   ai-engineering-from-scratch -> field notes, career routes, build challenges
+//
+// The four long-form collections have their own parsers in resource-parsers.ts,
+// kept free of the database so they can be run against the real files locally.
 
 import { db } from "@appdeploy/sdk";
 import { CHEATSHEET_INDEX } from "./cheatsheet-index";
+import {
+    Origin,
+    parseAwesomePython,
+    parseDesignPrimer,
+    parseInterviewPlan,
+    parseTutorials,
+} from "./resource-parsers";
 
 const TABLE = "resource_cache";
 const TTL = 7 * 24 * 60 * 60 * 1000;
@@ -21,9 +36,13 @@ const OWNER = "elijahmoses1000-jpg";
 export type ResourceKindId =
     | "apis"
     | "projects"
+    | "tutorials"
     | "books"
     | "lists"
+    | "python"
     | "practice"
+    | "design"
+    | "interview"
     | "cheatsheets"
     | "careers"
     | "builds";
@@ -61,11 +80,35 @@ export const SOURCES: Record<ResourceKindId, { label: string; blurb: string; rep
         repo: "EbookFoundation/free-programming-books",
         credit: "free-programming-books",
     },
+    tutorials: {
+        label: "Project tutorials",
+        blurb: "Tutorials that build a working project, by language.",
+        repo: "practical-tutorials/project-based-learning",
+        credit: "project-based-learning",
+    },
     lists: {
         label: "Curated lists",
         blurb: "The awesome index — a hand-picked list for almost any topic.",
         repo: "sindresorhus/awesome",
         credit: "awesome",
+    },
+    python: {
+        label: "Python libraries",
+        blurb: "Hand-picked Python frameworks and libraries, by category.",
+        repo: "vinta/awesome-python",
+        credit: "awesome-python",
+    },
+    design: {
+        label: "System design",
+        blurb: "How large systems are built, and the interview questions that test it — with solutions.",
+        repo: "donnemartin/system-design-primer",
+        credit: "system-design-primer",
+    },
+    interview: {
+        label: "Interview prep",
+        blurb: "A full study plan for software engineering interviews, by topic.",
+        repo: "jwasham/coding-interview-university",
+        credit: "coding-interview-university",
     },
     practice: {
         label: "Practice",
@@ -127,9 +170,25 @@ const CANDIDATES: Record<ResourceKindId, Candidate[]> = {
             paths: ["books/free-programming-books-langs.md", "books/free-programming-books-subjects.md"],
         },
     ],
+    tutorials: [
+        { repo: `${OWNER}/project-based-learning`, branch: "master", paths: ["README.md"] },
+        { repo: "practical-tutorials/project-based-learning", branch: "master", paths: ["README.md"] },
+    ],
     lists: [
         { repo: `${OWNER}/awesome`, branch: "main", paths: ["readme.md"] },
         { repo: "sindresorhus/awesome", branch: "main", paths: ["readme.md"] },
+    ],
+    python: [
+        { repo: `${OWNER}/awesome-python`, branch: "master", paths: ["README.md"] },
+        { repo: "vinta/awesome-python", branch: "master", paths: ["README.md"] },
+    ],
+    design: [
+        { repo: `${OWNER}/system-design-primer`, branch: "master", paths: ["README.md"] },
+        { repo: "donnemartin/system-design-primer", branch: "master", paths: ["README.md"] },
+    ],
+    interview: [
+        { repo: `${OWNER}/coding-interview-university`, branch: "main", paths: ["README.md"] },
+        { repo: "jwasham/coding-interview-university", branch: "main", paths: ["README.md"] },
     ],
     practice: [
         { repo: `${OWNER}/freeCodeCamp`, branch: "main", paths: ["client/i18n/locales/english/intro.json"] },
@@ -342,9 +401,13 @@ function parsePractice(json: unknown): ResourceItem[] {
 
 // --- public API -------------------------------------------------------------
 
-function parseFor(kind: ResourceKindId, texts: string[]): ResourceItem[] {
+function parseFor(kind: ResourceKindId, texts: string[], origin: Origin): ResourceItem[] {
     if (kind === "apis") return parseApis(texts[0]);
     if (kind === "projects") return parseProjects(texts[0]);
+    if (kind === "tutorials") return parseTutorials(texts[0]);
+    if (kind === "python") return parseAwesomePython(texts[0]);
+    if (kind === "design") return parseDesignPrimer(texts[0], origin);
+    if (kind === "interview") return parseInterviewPlan(texts[0]);
     if (kind === "books") {
         return [
             ...(texts[0] ? parseBooks(texts[0], "Languages") : []),
@@ -503,7 +566,7 @@ async function build(kind: ResourceKindId): Promise<{ items: ResourceItem[]; rep
             )
         );
         if (!texts[0]) continue;
-        const items = parseFor(kind, texts.map(t => t ?? ""));
+        const items = parseFor(kind, texts.map(t => t ?? ""), { repo: candidate.repo, branch: candidate.branch });
         if (items.length) return { items, repo: candidate.repo };
         console.warn(`resource ${kind}: ${candidate.repo} fetched but parsed to nothing`);
     }
