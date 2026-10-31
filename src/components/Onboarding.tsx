@@ -149,7 +149,18 @@ function BeforeAfter({
             <path d="M74 56 C 96 70, 104 76, 118 76" fill="none" stroke={tone} strokeWidth="1.8" />
           </>
         )}
-        <text x="93" y="62" textAnchor="middle" fontSize="8" fontWeight="700" fill={tone}>
+        {/* Each label sits clear of its own line. The Thinks → Answer curve
+            passes through (99, 71), so in the open drawing the label goes
+            beneath it: placed where "always" sits, it was printed across the
+            line and ran into the Thinks box. */}
+        <text
+          x={closed ? 93 : 92}
+          y={closed ? 62 : 88}
+          textAnchor="middle"
+          fontSize="8"
+          fontWeight="700"
+          fill={tone}
+        >
           {arrowLabel}
         </text>
       </svg>
