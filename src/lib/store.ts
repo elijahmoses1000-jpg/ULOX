@@ -75,6 +75,38 @@ export const useLab = create<LabState>((set, get) => ({
   dispatch: move => {
     const state = get();
     const puzzle = state.puzzle;
+
+    // Typing a contract is one move, not one per keystroke: an edit to the same
+    // ITOLS field as the last move folds into that move, measured from the
+    // graph as it stood before the field was first touched.
+    const last = state.ledger[state.ledger.length - 1];
+    if (
+      move.type === 'UPDATE_ITOLS' &&
+      last?.move.type === 'UPDATE_ITOLS' &&
+      last.move.nodeId === move.nodeId &&
+      last.move.key === move.key &&
+      state.redoStack.length === 0
+    ) {
+      const before = applyPatches(state.graph, last.inverse);
+      const [next, patches, inverse] = produceWithPatches(before, draft => {
+        mutateGraph(draft as AgentGraph, move);
+      });
+      const ledger = state.ledger.slice(0, -1);
+      // Typed back to where it started: the move is undone, not spent.
+      if (patches.length) {
+        ledger.push({
+          ...last,
+          move,
+          description: describeMove(before, move),
+          patches,
+          inverse,
+          snapshot: cloneGraph(next),
+        });
+      }
+      set({ graph: next, ledger, reviewIndex: null });
+      return true;
+    }
+
     if (puzzle && isScoringMove(move)) {
       const used = state.ledger.filter(e => e.scoring).length;
       if (used >= puzzle.maxMoves) return false;

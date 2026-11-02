@@ -30,6 +30,8 @@ export function PuzzlePlay() {
   const [failOpen, setFailOpen] = useState(false);
   const startRef = useRef(Date.now());
   const settledRef = useRef(false);
+  const failTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(failTimer.current), []);
 
   useEffect(() => {
     if (!puzzle) return;
@@ -58,6 +60,7 @@ export function PuzzlePlay() {
       setVerdict(result);
 
       const used = movesUsed();
+      window.clearTimeout(failTimer.current);
       if (result.solved && used > 0) {
         settledRef.current = true;
         const seconds = Math.round((Date.now() - startRef.current) / 1000);
@@ -65,14 +68,23 @@ export function PuzzlePlay() {
         setDelta(gained);
         setDone(true);
       } else if (!result.solved && used >= puzzle.maxMoves) {
-        settledRef.current = true;
-        recordSolve(puzzle.id, {
-          moves: used,
-          seconds: Math.round((Date.now() - startRef.current) / 1000),
-          hintsUsed: hints,
-          success: false,
-        });
-        setFailOpen(true);
+        const fail = () => {
+          if (settledRef.current) return;
+          settledRef.current = true;
+          recordSolve(puzzle.id, {
+            moves: used,
+            seconds: Math.round((Date.now() - startRef.current) / 1000),
+            hintsUsed: hints,
+            success: false,
+          });
+          setFailOpen(true);
+        };
+        // A contract still being typed is the same move until the typing stops,
+        // so the first keystroke of a last move must not end the tactic.
+        const ledger = useLab.getState().ledger;
+        const last = ledger[ledger.length - 1];
+        if (last?.move.type === 'UPDATE_ITOLS') failTimer.current = window.setTimeout(fail, 1800);
+        else fail();
       }
     },
     [puzzle, hints, movesUsed, recordSolve, reviewIndex]

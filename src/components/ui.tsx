@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
 export function Logo({ size = 26, wordmark = true }: { size?: number; wordmark?: boolean }) {
@@ -181,10 +181,19 @@ const ToastCtx = createContext<(text: string, tone?: Toast['tone']) => void>(() 
 
 export function ToastHost({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
+  // One toast per message: repeating a message that is already showing keeps
+  // it up longer instead of stacking a copy (a refused move can fire per keystroke).
+  const timers = useRef(new Map<string, { id: number; timer: number }>());
   const push = useCallback((text: string, tone: Toast['tone'] = 'info') => {
-    const id = Date.now() + Math.random();
-    setItems(list => [...list, { id, text, tone }]);
-    window.setTimeout(() => setItems(list => list.filter(t => t.id !== id)), 3800);
+    const showing = timers.current.get(text);
+    const id = showing?.id ?? Date.now() + Math.random();
+    if (showing) window.clearTimeout(showing.timer);
+    else setItems(list => [...list, { id, text, tone }]);
+    const timer = window.setTimeout(() => {
+      timers.current.delete(text);
+      setItems(list => list.filter(t => t.id !== id));
+    }, 3800);
+    timers.current.set(text, { id, timer });
   }, []);
   const value = useMemo(() => push, [push]);
 
