@@ -287,10 +287,19 @@ async function loadCache(
         .filter(row => row.kind === kind && (row.v ?? 1) === CACHE_VERSION)
         .sort((a, b) => (a.part ?? 0) - (b.part ?? 0));
     if (!mine.length) return null;
+    // Two first requests can both miss the cache and both save a full copy.
+    // Read only the newest batch, one row per part, so copies never stack.
+    const newest = Math.max(...mine.map(row => row.fetchedAt ?? 0));
+    const seen = new Set<number>();
+    const batch = mine.filter(row => {
+        if ((row.fetchedAt ?? 0) !== newest || seen.has(row.part ?? 0)) return false;
+        seen.add(row.part ?? 0);
+        return true;
+    });
     return {
-        items: mine.flatMap(row => row.items ?? []),
-        fetchedAt: Math.min(...mine.map(row => row.fetchedAt ?? 0)),
-        repo: mine[0].repo ?? SOURCES[kind].repo,
+        items: batch.flatMap(row => row.items ?? []),
+        fetchedAt: newest,
+        repo: batch[0].repo ?? SOURCES[kind].repo,
     };
 }
 
@@ -315,6 +324,10 @@ async function saveCache(kind: ResourceKindId, list: ResourceItem[], repo: strin
     for (let i = 0; i < records.length; i += 5) {
         await db.add(TABLE, records.slice(i, i + 5));
     }
+    // A save that raced this one may have landed meanwhile: keep only this batch.
+    const after = await db.list<ChunkRecord>(TABLE, { limit: 1000 });
+    const others = after.items.filter(row => row.kind === kind && row.fetchedAt !== now).map(row => row.id);
+    if (others.length) await db.delete(TABLE, others);
 }
 
 // --- parsers ----------------------------------------------------------------
