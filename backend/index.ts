@@ -45,6 +45,8 @@ const PUZZLE_IDS = [
     "pzl_unbounded_delegation",
     "pzl_double_loop",
     "pzl_guard_theatre",
+    "pzl_lecturer",
+    "pzl_blind_refactor",
 ];
 
 interface PlayerRecord {

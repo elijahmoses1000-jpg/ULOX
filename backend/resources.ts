@@ -1,6 +1,6 @@
 // Resource library.
 //
-// Ten public repositories, parsed into one uniform shape so a single UI can
+// Twelve public repositories, parsed into one uniform shape so a single UI can
 // render all of them, and cached in chunks because some of these lists run to
 // well over a thousand entries and a single record would not fit.
 //
@@ -14,8 +14,10 @@
 //   system-design-primer        -> design topics and interview questions with solutions
 //   coding-interview-university -> a study plan's resources, by section and topic
 //   ai-engineering-from-scratch -> field notes, career routes, build challenges
+//   GitNexus                    -> the tool surface a code-graph harness gives an agent
+//   learnharness                -> a teaching harness's method and its theory of learning
 //
-// The four long-form collections have their own parsers in resource-parsers.ts,
+// The long-form collections have their own parsers in resource-parsers.ts,
 // kept free of the database so they can be run against the real files locally.
 
 import { db } from "@appdeploy/sdk";
@@ -24,7 +26,9 @@ import {
     Origin,
     parseAwesomePython,
     parseDesignPrimer,
+    parseGitNexus,
     parseInterviewPlan,
+    parseLearnHarness,
     parseTutorials,
 } from "./resource-parsers";
 
@@ -45,7 +49,9 @@ export type ResourceKindId =
     | "interview"
     | "cheatsheets"
     | "careers"
-    | "builds";
+    | "builds"
+    | "codegraph"
+    | "teaching";
 
 /** github.com/rohitg00/ai-engineering-from-scratch */
 const AIEFS = "rohitg00/ai-engineering-from-scratch";
@@ -134,6 +140,18 @@ export const SOURCES: Record<ResourceKindId, { label: string; blurb: string; rep
         repo: AIEFS,
         credit: "ai-engineering-from-scratch",
     },
+    codegraph: {
+        label: "Code graph harness",
+        blurb: "GitNexus: the tools a coding agent gets when a repo is indexed as a knowledge graph — impact, trace, context.",
+        repo: "abhigyanpatwari/GitNexus",
+        credit: "GitNexus",
+    },
+    teaching: {
+        label: "Teaching harness",
+        blurb: "LearnHarness: an agent that measures, plans, teaches and drills — and the theory of learning behind it.",
+        repo: "amosblomqvist/learnharness",
+        credit: "LearnHarness",
+    },
 };
 
 interface Candidate {
@@ -197,6 +215,14 @@ const CANDIDATES: Record<ResourceKindId, Candidate[]> = {
     cheatsheets: [{ repo: AIEFS, branch: AIEFS_BRANCH, paths: [] }],
     careers: [{ repo: AIEFS, branch: AIEFS_BRANCH, paths: [] }],
     builds: [{ repo: AIEFS, branch: AIEFS_BRANCH, paths: ["projects/README.md"] }],
+    codegraph: [
+        { repo: `${OWNER}/GitNexus`, branch: "main", paths: ["docs/mcp-reference.md", "README.md"] },
+        { repo: "abhigyanpatwari/GitNexus", branch: "main", paths: ["docs/mcp-reference.md", "README.md"] },
+    ],
+    teaching: [
+        { repo: `${OWNER}/learnharness`, branch: "main", paths: ["README.md", "docs/README.md", "docs/teaching-methodology.md"] },
+        { repo: "amosblomqvist/learnharness", branch: "main", paths: ["README.md", "docs/README.md", "docs/teaching-methodology.md"] },
+    ],
 };
 
 async function fetchJson(url: string, timeoutMs = 12000): Promise<unknown | null> {
@@ -408,6 +434,8 @@ function parseFor(kind: ResourceKindId, texts: string[], origin: Origin): Resour
     if (kind === "python") return parseAwesomePython(texts[0]);
     if (kind === "design") return parseDesignPrimer(texts[0], origin);
     if (kind === "interview") return parseInterviewPlan(texts[0]);
+    if (kind === "codegraph") return parseGitNexus(texts, origin);
+    if (kind === "teaching") return parseLearnHarness(texts, origin);
     if (kind === "books") {
         return [
             ...(texts[0] ? parseBooks(texts[0], "Languages") : []),

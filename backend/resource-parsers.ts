@@ -1,4 +1,4 @@
-// Parsers for the four long-form collections.
+// Parsers for the long-form collections.
 //
 // Kept apart from resources.ts, which talks to the database, so they can be
 // run against the real READMEs on a laptop before a deploy. Each of these files
@@ -290,6 +290,174 @@ export function parseDesignPrimer(md: string, origin: Origin): ParsedItem[] {
                 meta: "With solution",
             });
         }
+    }
+    return out;
+}
+
+// --- agent harnesses: GitNexus and LearnHarness ------------------------------
+
+/** Every heading in a file, with GitHub's anchor for each, in order. */
+function headings(lines: string[]): Array<{ line: number; level: number; text: string; slug: string }> {
+    const seen = new Map<string, number>();
+    const out: Array<{ line: number; level: number; text: string; slug: string }> = [];
+    let fenced = false;
+    lines.forEach((raw, line) => {
+        if (/^\s*```/.test(raw)) fenced = !fenced;
+        const m = !fenced && raw.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (!m) return;
+        const text = heading(m[2]);
+        out.push({ line, level: m[1].length, text, slug: anchor(text, seen) });
+    });
+    return out;
+}
+
+/** The lines of a section, from just after its heading to the next heading at the same depth or shallower. */
+function section(lines: string[], match: RegExp): { body: string[]; slug: string } | null {
+    const hs = headings(lines);
+    const i = hs.findIndex(h => match.test(h.text));
+    if (i < 0) return null;
+    const end = hs.slice(i + 1).find(h => h.level <= hs[i].level);
+    return { body: lines.slice(hs[i].line + 1, end ? end.line : lines.length), slug: hs[i].slug };
+}
+
+/** Body rows of the first markdown table in a block, as trimmed cells (header and rule dropped). */
+function tableRows(block: string[]): string[][] {
+    const rows: string[][] = [];
+    let started = false;
+    for (const raw of block) {
+        const line = raw.trim();
+        if (!line.startsWith("|")) {
+            if (started) break;
+            continue;
+        }
+        started = true;
+        const cells = line.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+        if (cells.every(c => /^:?-{2,}:?$/.test(c))) continue;
+        rows.push(cells);
+    }
+    return rows.slice(1);
+}
+
+/** A code identifier as written: backticks gone, underscores kept (plain() would eat them). */
+const ident = (text: string) => text.replace(/`/g, "").trim();
+
+const blob = (origin: Origin, path: string, slug?: string) =>
+    `https://github.com/${origin.repo}/blob/${origin.branch}/${path}${slug ? `#${slug}` : ""}`;
+
+/** Resolve a link from a markdown file in `dir` to its page on GitHub. */
+function resolve(origin: Origin, dir: string, href: string): string {
+    if (/^https?:\/\//.test(href)) return href;
+    const stack: string[] = [];
+    for (const p of `${dir}/${href}`.split("/")) {
+        if (!p || p === ".") continue;
+        if (p === "..") stack.pop();
+        else stack.push(p);
+    }
+    return `https://github.com/${origin.repo}/blob/${origin.branch}/${stack.join("/")}`;
+}
+
+/**
+ * GitNexus, from docs/mcp-reference.md then README.md. What a learner needs is
+ * the tool surface an agent gets — each MCP tool, the guided prompts, the
+ * skills — plus the everyday tasks and commands, each linked to its reference.
+ */
+export function parseGitNexus(texts: string[], origin: Origin): ParsedItem[] {
+    const out: ParsedItem[] = [];
+    const [mcp = "", readme = ""] = texts;
+    const ref = mcp.split(/\r?\n/);
+    const top = readme.split(/\r?\n/);
+
+    const tasks = section(top, /^What you can do$/i);
+    for (const [task, tool] of tasks ? tableRows(tasks.body) : []) {
+        if (!task || !tool) continue;
+        out.push({ title: plain(task), url: blob(origin, "README.md", tasks!.slug), group: "Everyday tasks", meta: ident(tool) });
+    }
+
+    const tools = section(ref, /MCP tools/i);
+    for (const [name, what] of tools ? tableRows(tools.body) : []) {
+        if (!name || !what) continue;
+        out.push({ title: ident(name), url: blob(origin, "docs/mcp-reference.md", tools!.slug), group: "MCP tools", note: clip(plain(what), 180) });
+    }
+
+    const prompts = section(ref, /MCP prompts/i);
+    for (const [name, what] of prompts ? tableRows(prompts.body) : []) {
+        if (!name || !what) continue;
+        out.push({ title: ident(name), url: blob(origin, "docs/mcp-reference.md", prompts!.slug), group: "Guided prompts", note: clip(plain(what), 180) });
+    }
+
+    const skills = section(ref, /^Agent skills/i);
+    for (const raw of skills?.body ?? []) {
+        const m = raw.match(/^\s*[-*]\s+\*\*([^*]+)\*\*\s*(?:\(`([^`]+)`\))?\s*[—–-]\s*(.+)$/);
+        if (!m) continue;
+        out.push({
+            title: plain(m[1]),
+            url: blob(origin, "docs/mcp-reference.md", skills!.slug),
+            group: "Agent skills",
+            note: clip(plain(m[3]), 180),
+            meta: m[2],
+        });
+    }
+
+    const commands = section(top, /^Everyday commands$/i);
+    for (const raw of commands?.body ?? []) {
+        const m = raw.match(/^\s*(gitnexus\s[^#]+?)\s+#\s*(.+)$/);
+        if (!m) continue;
+        out.push({ title: m[1].trim(), url: blob(origin, "docs/cli-reference.md"), group: "CLI commands", note: clip(m[2].trim(), 180) });
+    }
+
+    const docs = section(top, /^Documentation$/i);
+    for (const [read = "", forWhat = ""] of docs ? tableRows(docs.body) : []) {
+        for (const link of read.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)) {
+            out.push({ title: plain(link[1]), url: resolve(origin, "", link[2].split("#")[0]), group: "Reference", note: clip(plain(forWhat), 180) });
+        }
+    }
+    return out;
+}
+
+/**
+ * LearnHarness, from README.md, docs/README.md and docs/teaching-methodology.md.
+ * The method (measure, plan, teach, practice) is the part UloX teaches with;
+ * the theory's numbered sections are each a card linked to its paragraph.
+ */
+export function parseLearnHarness(texts: string[], origin: Origin): ParsedItem[] {
+    const out: ParsedItem[] = [];
+    const [readme = "", index = "", theory = ""] = texts;
+    const top = readme.split(/\r?\n/);
+
+    const how = section(top, /^How it works$/i);
+    for (const raw of how?.body ?? []) {
+        const m = raw.match(/^\s*(?:\d+\.\s+)?\*\*([^*]+?)\.?\*\*\s*(.+)$/);
+        if (!m) continue;
+        out.push({ title: plain(m[1]), url: blob(origin, "README.md", how!.slug), group: "The method", note: clip(plain(m[2]), 180) });
+    }
+    const carries = section(top, /^Knowledge that carries forward$/i);
+    if (carries) {
+        out.push({ title: "Knowledge graph", url: blob(origin, "README.md", carries.slug), group: "The method", note: firstProse(carries.body, 0) });
+    }
+
+    const lines = theory.split(/\r?\n/);
+    for (const h of headings(lines)) {
+        const m = h.text.match(/^(\d+[a-z]?)\.\s+(.+)$/);
+        if (!m || h.level < 2) continue;
+        out.push({
+            title: m[2],
+            url: blob(origin, "docs/teaching-methodology.md", h.slug),
+            group: "Theory of learning",
+            note: firstProse(lines, h.line + 1),
+            meta: `§${m[1]}`,
+        });
+    }
+
+    let group = "";
+    for (const raw of index.split(/\r?\n/)) {
+        const h = raw.match(/^##\s+(.+)$/);
+        if (h) {
+            group = heading(h[1]);
+            continue;
+        }
+        const m = raw.match(/^\s*[-*]\s+\[([^\]]+)\]\(([^)\s]+)\)\s*(?:[—–-]\s*(.+))?$/);
+        if (!m || !group) continue;
+        out.push({ title: plain(m[1]), url: resolve(origin, "docs", m[2]), group: `Guides · ${group}`, note: m[3] ? clip(plain(m[3]), 180) : undefined });
     }
     return out;
 }

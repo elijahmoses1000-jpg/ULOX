@@ -95,7 +95,7 @@ export const ROADMAPS: Roadmap[] = [
               'Without persisted state, iteration 2 is a re-run of iteration 1. You pay twice and learn once.',
               'Decide explicitly what carries forward: retrieved facts, attempted tool calls, rejected hypotheses, and the running cost. The predicate that ends your loop reads from exactly this state, so if it is not persisted, the loop cannot end.'
             ),
-            puzzles: ['pzl_amnesiac', 'pzl_identity_drift'],
+            puzzles: ['pzl_amnesiac', 'pzl_identity_drift', 'pzl_lecturer'],
           },
         ],
       },
@@ -122,7 +122,7 @@ export const ROADMAPS: Roadmap[] = [
               'A tool has an input shape, an output shape and a cost. The node downstream declares what it expects. When those disagree, you have a bug that no amount of prompt tuning fixes.',
               'Bind tools by contract, not by hope. The analyzer checks the binding statically and refuses to give you a positive score on a mismatch.'
             ),
-            puzzles: ['pzl_type_mismatch', 'pzl_format_brittle'],
+            puzzles: ['pzl_type_mismatch', 'pzl_format_brittle', 'pzl_blind_refactor'],
           },
           {
             id: 'reflexion',

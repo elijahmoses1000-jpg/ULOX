@@ -257,22 +257,37 @@ export function GraphCanvas({
             const { x1, y1, x2, y2 } = anchors(a, b);
             const selected = selection?.type === 'edge' && selection.id === edge.id;
             const live = visitedSet.has(edge.source) && visitedSet.has(edge.target);
-            const mx = (x1 + x2) / 2;
-            const my = (y1 + y2) / 2;
+            let mx = (x1 + x2) / 2;
+            let my = (y1 + y2) / 2;
+            // A→B and B→A share one midpoint, so one label would hide the other and
+            // could never be tapped. Nudge each off the line along its own left
+            // normal: the reverse edge's normal points the other way, so they part.
+            if (graph.edges.some(o => o.source === edge.target && o.target === edge.source)) {
+              const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+              mx += (-(y2 - y1) / len) * 11;
+              my += ((x2 - x1) / len) * 11;
+            }
+            // An edge handles its own press: if it reached the canvas, the canvas
+            // would capture the pointer, the release would never come back here,
+            // and the tap would be read as a tap on empty space (deselect).
+            const pick = {
+              onPointerDown: (ev: React.PointerEvent) => ev.stopPropagation(),
+              onPointerUp: (ev: React.PointerEvent) => {
+                ev.stopPropagation();
+                pointers.current.delete(ev.pointerId);
+                dragRef.current = null;
+                handledAt.current = Date.now();
+                onSelect({ type: 'edge', id: edge.id });
+              },
+              onClick: (ev: React.MouseEvent) => {
+                ev.stopPropagation();
+                if (Date.now() - handledAt.current < 400) return;
+                onSelect({ type: 'edge', id: edge.id });
+              },
+            };
             return (
               <g key={edge.id} className="cursor-pointer">
-                <path
-                  d={bezier(x1, y1, x2, y2)}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth={18}
-                  onPointerUp={ev => {
-                    ev.stopPropagation();
-                    pointers.current.delete(ev.pointerId);
-                    dragRef.current = null;
-                    onSelect({ type: 'edge', id: edge.id });
-                  }}
-                />
+                <path d={bezier(x1, y1, x2, y2)} fill="none" stroke="transparent" strokeWidth={18} {...pick} />
                 <path
                   d={bezier(x1, y1, x2, y2)}
                   fill="none"
@@ -282,7 +297,8 @@ export function GraphCanvas({
                   className={live ? 'edge-flow' : ''}
                   pointerEvents="none"
                 />
-                <g pointerEvents="none" transform={`translate(${mx},${my})`}>
+                {/* The label is what people aim at, and it does not always sit on the curve. */}
+                <g transform={`translate(${mx},${my})`} {...pick}>
                   <rect
                     x={-CONDITION_LABEL[edge.condition].length * 3.1 - 6}
                     y={-9}

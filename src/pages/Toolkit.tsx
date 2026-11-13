@@ -5,8 +5,10 @@ import {
   BookOpen,
   Code2,
   Compass,
+  Brain,
   ExternalLink,
   FileText,
+  GitBranch,
   GraduationCap,
   Hammer,
   Network,
@@ -31,7 +33,9 @@ type KindId =
   | 'interview'
   | 'cheatsheets'
   | 'careers'
-  | 'builds';
+  | 'builds'
+  | 'codegraph'
+  | 'teaching';
 
 interface ResourceItem {
   title: string;
@@ -64,6 +68,8 @@ const TABS: Array<{ id: KindId; label: string; icon: typeof Plug; pitch: string 
   { id: 'books', label: 'Books', icon: BookOpen, pitch: 'Free books and courses, by language and subject.' },
   { id: 'lists', label: 'Lists', icon: Sparkles, pitch: 'The awesome index — a curated list for almost anything.' },
   { id: 'python', label: 'Python', icon: Code2, pitch: 'Hand-picked Python frameworks and libraries, by category.' },
+  { id: 'codegraph', label: 'Code graph', icon: GitBranch, pitch: 'GitNexus: the impact, trace and context tools a coding agent gets from a code knowledge graph.' },
+  { id: 'teaching', label: 'Teaching harness', icon: Brain, pitch: 'LearnHarness: measure, plan, teach, practise — and the theory of learning behind it.' },
 ];
 
 const TAB_BY_ID = new Map(TABS.map(t => [t.id, t]));
@@ -75,8 +81,8 @@ const TAB_BY_ID = new Map(TABS.map(t => [t.id, t]));
  * wrap instead, and every one stays in view.
  */
 const SHELVES: Array<{ label: string; ids: KindId[] }> = [
-  { label: 'Build things', ids: ['builds', 'projects', 'tutorials', 'apis'] },
-  { label: 'Understand', ids: ['cheatsheets', 'design', 'practice'] },
+  { label: 'Build things', ids: ['builds', 'projects', 'tutorials', 'apis', 'codegraph'] },
+  { label: 'Understand', ids: ['cheatsheets', 'design', 'practice', 'teaching'] },
   { label: 'Get hired', ids: ['interview', 'careers'] },
   { label: 'Read & browse', ids: ['books', 'lists', 'python'] },
 ];
@@ -142,7 +148,7 @@ export function Toolkit() {
       <header className="mb-4">
         <h1 className="font-display text-2xl font-bold tracking-tight">Toolkit</h1>
         <p className="text-sm text-chalk-dim mt-1 max-w-2xl">
-          {TABS.length} collections from ten open-source projects, searchable in one place. Everything here is a real
+          {TABS.length} collections from twelve open-source projects, searchable in one place. Everything here is a real
           link to a real resource — nothing is generated.
         </p>
       </header>

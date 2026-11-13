@@ -37,13 +37,13 @@ export const STAGE_REQUIREMENTS: Record<string, { title: string; formal: string;
         title: "Feed it the right things",
         formal: "Context Engineering",
         topics: ["memory", "rag", "embeddings", "few-shot"],
-        drills: ["pzl_amnesiac", "pzl_prompt_injection"],
+        drills: ["pzl_amnesiac", "pzl_prompt_injection", "pzl_lecturer"],
     },
     harness: {
         title: "Give it hands",
         formal: "Harness Engineering",
         topics: ["tool-binding", "error-handling", "llm-basics"],
-        drills: ["pzl_type_mismatch", "pzl_silent_failure", "pzl_retry_storm"],
+        drills: ["pzl_type_mismatch", "pzl_silent_failure", "pzl_retry_storm", "pzl_blind_refactor"],
     },
     loop: {
         title: "Let it keep going",
